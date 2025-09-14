@@ -4,16 +4,16 @@ import { useState } from 'react';
 
 export default function ChatBotDemo() {
   const [config, setConfig] = useState({
-    llmProvider: 'perplexity' as 'openai' | 'groq' | 'anthropic' | 'perplexity' | 'xai',
-    llmApiKey: '',
-    llmModel: '',
+    llmProvider: 'openai' as 'openai' | 'groq' | 'anthropic' | 'perplexity' | 'xai',
+    llmApiKey: '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',
+    llmModel: 'gpt-3.5-turbo',
     theme: 'auto' as 'light' | 'dark' | 'auto',
     position: 'bottom-right' as 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left',
     enableStreaming: true,
     // Contentstack configuration
-    contentstackApiKey: '',
-    contentstackToken: '',
-    contentstackEnvironment: 'development',
+    contentstackApiKey: 'blt354ba6a0b8b7e140', // Your real API key
+    contentstackToken: 'cs7f1c6103726d54fe1978f31f', // Your real delivery token
+    contentstackEnvironment: 'development', // or 'production' if your content is there
     contentTypes: ['tour', 'faq', 'blog'] as string[]
   });
 
