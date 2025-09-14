@@ -1,1 +1,1 @@
-{"version":3,"file":"useChatBot.d.ts","sourceRoot":"","sources":["../../src/hooks/useChatBot.ts"],"names":[],"mappings":"AACA,OAAO,EAAa,OAAO,EAAE,YAAY,EAAE,MAAM,eAAe,CAAC;AAEjE,wBAAgB,UAAU,CAAC,KAAK,EAAE,YAAY;2BAaI,MAAM;;;;;;EAqFvD"}
+{"version":3,"file":"useChatBot.d.ts","sourceRoot":"","sources":["../../src/hooks/useChatBot.ts"],"names":[],"mappings":"AACA,OAAO,EAAa,OAAO,EAAE,YAAY,EAAE,MAAM,eAAe,CAAC;AAEjE,wBAAgB,UAAU,CAAC,KAAK,EAAE,YAAY;2BAaI,MAAM;;;;;;EAuGvD"}

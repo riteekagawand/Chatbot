@@ -44,6 +44,19 @@ export function useChatBot(props) {
             });
             if (!apiResponse.ok) {
                 const errorData = await apiResponse.json().catch(() => ({}));
+                // Handle specific error types
+                if (errorData.type === 'RATE_LIMIT') {
+                    throw new Error(`Rate limit exceeded. Please wait ${errorData.retryAfter || 60} seconds before trying again.`);
+                }
+                if (errorData.type === 'AUTH_ERROR') {
+                    throw new Error('Invalid API credentials. Please check your API key and try again.');
+                }
+                if (errorData.type === 'CONTENT_ERROR') {
+                    throw new Error('Content service temporarily unavailable. Please try again later.');
+                }
+                if (errorData.type === 'TIMEOUT_ERROR') {
+                    throw new Error('Request timeout. Please try again.');
+                }
                 throw new Error(errorData.error || `HTTP error! status: ${apiResponse.status}`);
             }
             const data = await apiResponse.json();
