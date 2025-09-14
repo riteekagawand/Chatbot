@@ -1,24 +1,23 @@
 {
-  "name": "chatbot-app",
+  "name": "chatbot-platform",
   "version": "0.1.0",
   "private": true,
+  "description": "A plug-and-play chat agent platform for developers with Contentstack integration",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start"
-  },
-  "dependencies": {
-    "@tailwindcss/postcss": "^4.1.13",
-    "next": "15.5.2",
-    "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "type-check": "turbo run type-check",
+    "clean": "turbo run clean"
   },
   "devDependencies": {
-    "@types/node": "24.3.1",
-    "@types/react": "19.1.12",
-    "autoprefixer": "^10.4.21",
-    "postcss": "^8.5.6",
-    "tailwindcss": "^4.1.13",
-    "typescript": "5.9.2"
+    "turbo": "^1.10.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
   }
 }
