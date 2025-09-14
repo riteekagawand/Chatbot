@@ -46,8 +46,13 @@ class ContentstackService {
       let url = `${this.baseUrl}/content_types/${contentType}/entries?environment=${this.environment}&limit=${limit}`;
       
       if (searchQuery) {
-        // Use simple text search with URL encoding
-        const query = JSON.stringify({"title":{"$regex":searchQuery,"$options":"i"}});
+        // Use different search fields based on content type
+        let searchField = "title";
+        if (contentType === 'faqs') {
+          searchField = "question";
+        }
+        
+        const query = JSON.stringify({[searchField]:{"$regex":searchQuery,"$options":"i"}});
         url += `&query=${encodeURIComponent(query)}`;
       }
 
@@ -72,7 +77,7 @@ class ContentstackService {
       
       return data.entries?.map((entry: any) => ({
         uid: entry.uid,
-        title: entry.title || entry.question || 'Untitled',
+        title: contentType === 'faqs' ? (entry.question || 'Untitled') : (entry.title || 'Untitled'),
         content: this.extractContent(entry, contentType),
         contentType: contentType,
         metadata: {
@@ -87,7 +92,7 @@ class ContentstackService {
     }
   }
 
-  async searchAllContent(query: string, contentTypes: string[] = ['tour', 'faq', 'blog']): Promise<ContentstackEntry[]> {
+  async searchAllContent(query: string, contentTypes: string[] = ['tour', 'faqs']): Promise<ContentstackEntry[]> {
     const allResults: ContentstackEntry[] = [];
     
     for (const contentType of contentTypes) {
@@ -188,8 +193,8 @@ class ContentstackService {
         if (entry.requirements) tourInfo.push(`Requirements: ${entry.requirements}`);
         if (entry.season) tourInfo.push(`Best Season: ${entry.season}`);
         return tourInfo.join('. ') + (tourInfo.length > 0 ? '.' : '');
-      case 'faq':
-        return entry.answer || entry.content || '';
+      case 'faqs':
+        return entry.answers || entry.content || '';
       case 'blog':
         return entry.content || entry.description || '';
       default:
@@ -264,23 +269,56 @@ export async function POST(req: NextRequest) {
             console.log('Using search query:', searchQuery);
           }
           
-          // Search for tours directly
-          searchResults = await contentstackService.searchContent({
+          // Search for tours and FAQs
+          const tourResults = await contentstackService.searchContent({
             contentType: 'tour',
             query: searchQuery,
             limit: 5
           });
-          console.log('Tour search results:', searchResults.length);
-        } else {
-          console.log('Non-tour query, searching tours only for general questions');
-          // For general questions, search tours only since other content types may not exist
-          const results = await contentstackService.searchContent({
-            contentType: 'tour',
-            query: '', // Empty query to get all tours
-            limit: 10
+          
+          const faqResults = await contentstackService.searchContent({
+            contentType: 'faqs',
+            query: searchQuery,
+            limit: 3
           });
-          searchResults.push(...results);
-          console.log('General search results (all tours):', searchResults.length);
+          
+          searchResults.push(...tourResults, ...faqResults);
+          console.log('Tour search results:', tourResults.length);
+          console.log('FAQ search results:', faqResults.length);
+          console.log('Total search results:', searchResults.length);
+        } else {
+          console.log('Non-tour query, searching all content types');
+          // For general questions, search all available content types
+          const allResults = await contentstackService.searchAllContent(message, contentTypes || ['tour', 'faqs']);
+          searchResults.push(...allResults);
+          console.log('General search results (all content):', searchResults.length);
+          
+          // If no results found, try with broader search terms
+          if (searchResults.length === 0) {
+            console.log('No results found, trying broader search...');
+            
+            // Extract key terms and try individual searches with fuzzy matching
+            const keyTerms = message.toLowerCase().match(/\b(accommodation|accomodation|hotel|refund|insurance|flight|booking|emergency|contact|tour|travel|swiss|alps|italy|france)\b/g) || [];
+            console.log('Key terms found:', keyTerms);
+            
+            // Map common typos to correct terms
+            const termMappings = {
+              'accomodation': 'accommodation',
+              'accomodations': 'accommodation',
+              'accomodate': 'accommodation'
+            };
+            
+            for (const term of keyTerms) {
+              const searchTerm = termMappings[term] || term;
+              console.log(`Searching for: ${searchTerm} (original: ${term})`);
+              
+              const termResults = await contentstackService.searchAllContent(searchTerm, contentTypes || ['tour', 'faqs']);
+              searchResults.push(...termResults);
+              if (searchResults.length > 0) break; // Stop at first successful search
+            }
+            
+            console.log('Broader search results:', searchResults.length);
+          }
         }
         
         if (searchResults.length > 0) {
@@ -375,6 +413,7 @@ If you have relevant tour information from the knowledge base, use it to provide
         
         return NextResponse.json({ 
           content: directResponse,
+          searchResults: searchResults,
           usage: undefined
         });
       } else {
@@ -388,6 +427,7 @@ If you have relevant tour information from the knowledge base, use it to provide
 
     return NextResponse.json({ 
       content: response,
+      searchResults: searchResults.length > 0 ? searchResults : undefined,
       usage: undefined // Could be added later if needed
     });
 

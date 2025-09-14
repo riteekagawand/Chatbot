@@ -88,7 +88,7 @@ class ContentstackService {
     }
   }
 
-  async searchAllContent(query: string, contentTypes: string[] = ['tour', 'faq', 'blog']): Promise<ContentstackEntry[]> {
+  async searchAllContent(query: string, contentTypes: string[] = ['tour', 'faqs']): Promise<ContentstackEntry[]> {
     // Check cache first
     const cacheKey = contentCache.generateKey(query, contentTypes, this.environment);
     const cachedResult = contentCache.get(cacheKey);
@@ -101,7 +101,19 @@ class ContentstackService {
     console.log('Cache miss, fetching from Contentstack for query:', query);
     const allResults: ContentstackEntry[] = [];
     
-    for (const contentType of contentTypes) {
+    // If no specific content types provided, get all available types
+    let typesToSearch = contentTypes;
+    if (!contentTypes || contentTypes.length === 0) {
+      try {
+        typesToSearch = await this.getContentTypes();
+        console.log('Auto-detected content types:', typesToSearch);
+      } catch (error) {
+        console.error('Error getting content types, using defaults:', error);
+        typesToSearch = ['tour', 'faqs'];
+      }
+    }
+    
+    for (const contentType of typesToSearch) {
       try {
         const results = await this.searchContent({
           contentType,
@@ -121,19 +133,46 @@ class ContentstackService {
     return allResults;
   }
 
+  async getContentTypes(): Promise<string[]> {
+    try {
+      const url = `${this.baseUrl}/content_types?environment=${this.environment}`;
+      
+      const response = await fetch(url, {
+        headers: {
+          'api_key': this.apiKey,
+          'access_token': this.deliveryToken,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Contentstack API error: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const contentTypes = data.content_types?.map((ct: any) => ct.uid) || [];
+      console.log('Available content types from Contentstack:', contentTypes);
+      return contentTypes;
+    } catch (error) {
+      console.error('Contentstack get content types error:', error);
+      return ['tour', 'faq', 'blog']; // Fallback to default types
+    }
+  }
+
   private extractContent(entry: any, contentType: string): string {
+    // Handle known content types with specific formatting
     switch (contentType) {
       case 'tour':
         return `Title: ${entry.title || 'Untitled Tour'}
 Description: ${entry.description || 'No description available'}
-Location: ${entry.location || 'Location not specified'}
+Country: ${entry.country || 'Country not specified'}
 Price: ${entry.price || 'Price not available'}
 Duration: ${entry.duration || 'Duration not specified'}`;
       
-      case 'faq':
+      case 'faqs':
         return `Question: ${entry.question || 'No question'}
-Answer: ${entry.answer || 'No answer available'}
-Category: ${entry.category || 'General'}`;
+Answer: ${entry.answers || 'No answer available'}
+Category: ${entry.tags ? entry.tags.join(', ') : 'General'}`;
       
       case 'blog':
         return `Title: ${entry.title || 'Untitled Blog Post'}
@@ -141,10 +180,62 @@ Content: ${entry.content || 'No content available'}
 Author: ${entry.author || 'Unknown author'}
 Tags: ${entry.tags ? entry.tags.join(', ') : 'No tags'}`;
       
+      case 'product':
+        return `Title: ${entry.title || 'Untitled Product'}
+Description: ${entry.description || 'No description available'}
+Price: ${entry.price || 'Price not available'}
+Category: ${entry.category || 'General'}
+SKU: ${entry.sku || 'No SKU'}`;
+      
+      case 'article':
+        return `Title: ${entry.title || 'Untitled Article'}
+Content: ${entry.content || 'No content available'}
+Author: ${entry.author || 'Unknown author'}
+Published: ${entry.publish_date || 'No date'}
+Tags: ${entry.tags ? entry.tags.join(', ') : 'No tags'}`;
+      
       default:
-        return `Title: ${entry.title || 'Untitled'}
-Content: ${JSON.stringify(entry, null, 2)}`;
+        // Dynamic content extraction for any content type
+        const title = entry.title || entry.name || entry.question || 'Untitled';
+        const description = entry.description || entry.content || entry.answer || '';
+        const additionalFields = this.extractAdditionalFields(entry, contentType);
+        
+        return `Title: ${title}
+${description ? `Description: ${description}` : ''}
+${additionalFields}`;
     }
+  }
+
+  private extractAdditionalFields(entry: any, contentType: string): string {
+    const fields = [];
+    
+    // Common fields to extract
+    const commonFields = ['price', 'location', 'category', 'author', 'tags', 'status', 'date', 'url'];
+    
+    for (const field of commonFields) {
+      if (entry[field] && entry[field] !== '') {
+        const value = Array.isArray(entry[field]) 
+          ? entry[field].join(', ') 
+          : entry[field];
+        fields.push(`${field.charAt(0).toUpperCase() + field.slice(1)}: ${value}`);
+      }
+    }
+    
+    // Add any other fields that might be relevant
+    for (const [key, value] of Object.entries(entry)) {
+      if (!commonFields.includes(key) && 
+          !['title', 'name', 'question', 'description', 'content', 'answer', 'uid', 'created_at', 'updated_at'].includes(key) &&
+          value && value !== '') {
+        const displayValue = Array.isArray(value) 
+          ? value.join(', ') 
+          : String(value);
+        if (displayValue.length < 200) { // Only include reasonable length fields
+          fields.push(`${key.charAt(0).toUpperCase() + key.slice(1)}: ${displayValue}`);
+        }
+      }
+    }
+    
+    return fields.length > 0 ? fields.join('\n') : '';
   }
 }
 
@@ -299,19 +390,28 @@ export async function POST(req: NextRequest) {
     
     if (contentstackService) {
       try {
+        console.log('🔍 Starting Contentstack search for:', message);
+        console.log('📋 Content types:', contentTypes || ['tour', 'faqs']);
+        
         searchResults = await contentstackService.searchAllContent(
           message, 
-          contentTypes || ['tour', 'faq', 'blog']
+          contentTypes || ['tour', 'faqs']
         );
+        
+        console.log('📊 Search results count:', searchResults.length);
+        console.log('📊 Search results:', searchResults.map(r => ({ title: r.title, contentType: r.contentType })));
         
         if (searchResults.length > 0) {
           relevantContent = '\n\nRelevant content from our knowledge base:\n';
           searchResults.forEach((entry, index) => {
             relevantContent += `\n${index + 1}. ${entry.title}\n${entry.content}\n`;
           });
+          console.log('📝 Relevant content length:', relevantContent.length);
+        } else {
+          console.log('⚠️ No search results found');
         }
       } catch (error) {
-        console.error('Contentstack search error:', error);
+        console.error('❌ Contentstack search error:', error);
         // Continue without content if search fails
       }
     }
@@ -365,7 +465,7 @@ export async function POST(req: NextRequest) {
       content: response,
       searchResults: searchResults.length > 0 ? searchResults : undefined,
       metadata: {
-        cached: contentstackService ? contentCache.has(contentCache.generateKey(message, contentTypes || ['tour', 'faq', 'blog'], contentstackEnvironment || 'development')) : false,
+        cached: contentstackService ? contentCache.has(contentCache.generateKey(message, contentTypes || ['tour', 'faqs'], contentstackEnvironment || 'development')) : false,
         rateLimitRemaining: rateLimiter.getRemainingRequests(rateLimitKey)
       }
     });

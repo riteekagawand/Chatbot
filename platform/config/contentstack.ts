@@ -10,15 +10,11 @@ export const contentstackConfig = {
   // Content type mappings
   contentTypes: {
     tour: {
-      fields: ['title', 'description', 'location', 'price', 'duration'],
+      fields: ['title', 'description', 'country', 'price', 'duration'],
       searchable: true
     },
-    faq: {
-      fields: ['question', 'answer', 'category'],
-      searchable: true
-    },
-    blog: {
-      fields: ['title', 'content', 'author', 'tags'],
+    faqs: {
+      fields: ['question', 'answers', 'tags'],
       searchable: true
     }
   }
