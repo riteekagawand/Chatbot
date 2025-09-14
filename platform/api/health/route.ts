@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { contentCache } from '../../services/cache/contentCache';
+import { redisCache } from '../../services/cache/redisCache';
 import { rateLimiter } from '../../services/rateLimiter';
 
 export async function GET(req: NextRequest) {
   try {
-    const cacheStats = contentCache.getStats();
+    const cacheStats = await redisCache.getStats();
     const rateLimitStats = rateLimiter.getStats();
     
     const health = {
@@ -13,8 +13,9 @@ export async function GET(req: NextRequest) {
       services: {
         cache: {
           status: 'operational',
+          type: cacheStats.type,
           entries: cacheStats.size,
-          keys: cacheStats.keys.slice(0, 5) // Show first 5 keys for debugging
+          keys: cacheStats.keys?.slice(0, 5) || [] // Show first 5 keys for debugging
         },
         rateLimiter: {
           status: 'operational',
@@ -26,6 +27,12 @@ export async function GET(req: NextRequest) {
           uptime: process.uptime(),
           memory: process.memoryUsage(),
           version: process.version
+        },
+        features: {
+          redisCache: cacheStats.type === 'redis' ? 'enabled' : 'fallback',
+          retryMechanisms: 'enabled',
+          relevanceScoring: 'enabled',
+          parallelSearch: 'enabled'
         }
       },
       environment: process.env.NODE_ENV || 'development'

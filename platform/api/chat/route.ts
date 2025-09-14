@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { contentCache } from '../../services/cache/contentCache';
+import { redisCache } from '../../services/cache/redisCache';
 import { rateLimiter } from '../../services/rateLimiter';
+import { retryService } from '../../services/retryService';
+import { relevanceService } from '../../services/relevanceService';
 
 // Contentstack service interfaces and implementation
 interface ContentstackCredentials {
@@ -40,58 +42,59 @@ class ContentstackService {
   }
 
   async searchContent(query: ContentstackQuery): Promise<ContentstackEntry[]> {
-    try {
-      const contentType = query.contentType;
-      const searchQuery = query.query || '';
-      const limit = query.limit || 10;
-      
-      let url = `${this.baseUrl}/content_types/${contentType}/entries?environment=${this.environment}&limit=${limit}`;
-      
-      if (searchQuery) {
-        const query = JSON.stringify({"title":{"$regex":searchQuery,"$options":"i"}});
-        url += `&query=${encodeURIComponent(query)}`;
-      }
-
-      if (query.filters) {
-        const filterQuery = JSON.stringify(query.filters);
-        url += `&query=${filterQuery}`;
-      }
-
-      const response = await fetch(url, {
-        headers: {
-          'api_key': this.apiKey,
-          'access_token': this.deliveryToken,
-          'Content-Type': 'application/json'
+    return retryService.executeWithRetry(
+      async () => {
+        const contentType = query.contentType;
+        const searchQuery = query.query || '';
+        const limit = query.limit || 10;
+        
+        let url = `${this.baseUrl}/content_types/${contentType}/entries?environment=${this.environment}&limit=${limit}`;
+        
+        if (searchQuery) {
+          const query = JSON.stringify({"title":{"$regex":searchQuery,"$options":"i"}});
+          url += `&query=${encodeURIComponent(query)}`;
         }
-      });
 
-      if (!response.ok) {
-        throw new Error(`Contentstack API error: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      
-      return data.entries?.map((entry: any) => ({
-        uid: entry.uid,
-        title: entry.title || entry.question || 'Untitled',
-        content: this.extractContent(entry, contentType),
-        contentType: contentType,
-        metadata: {
-          ...entry,
-          url: entry.url || `/${contentType}/${entry.uid}`
+        if (query.filters) {
+          const filterQuery = JSON.stringify(query.filters);
+          url += `&query=${filterQuery}`;
         }
-      })) || [];
 
-    } catch (error) {
-      console.error('Contentstack search error:', error);
-      throw new Error(`Failed to search content: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+        const response = await fetch(url, {
+          headers: {
+            'api_key': this.apiKey,
+            'access_token': this.deliveryToken,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`Contentstack API error: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        
+        return data.entries?.map((entry: any) => ({
+          uid: entry.uid,
+          title: entry.title || entry.question || 'Untitled',
+          content: this.extractContent(entry, contentType),
+          contentType: contentType,
+          metadata: {
+            ...entry,
+            url: entry.url || `/${contentType}/${entry.uid}`
+          }
+        })) || [];
+      },
+      {
+        retryCondition: retryService.isRetryableContentstackError
+      }
+    );
   }
 
   async searchAllContent(query: string, contentTypes: string[] = ['tour', 'faqs']): Promise<ContentstackEntry[]> {
     // Check cache first
-    const cacheKey = contentCache.generateKey(query, contentTypes, this.environment);
-    const cachedResult = contentCache.get(cacheKey);
+    const cacheKey = redisCache.generateKey(query, contentTypes, this.environment);
+    const cachedResult = await redisCache.get(cacheKey);
     
     if (cachedResult) {
       console.log('Cache hit for query:', query);
@@ -113,24 +116,39 @@ class ContentstackService {
       }
     }
     
-    for (const contentType of typesToSearch) {
+    // Search all content types in parallel for better performance
+    const searchPromises = typesToSearch.map(async (contentType) => {
       try {
         const results = await this.searchContent({
           contentType,
           query,
           limit: 5
         });
-        allResults.push(...results);
+        return results;
       } catch (error) {
         console.error(`Error searching ${contentType}:`, error);
-        // Continue with other content types
+        return [];
       }
-    }
+    });
     
-    // Cache the results for 5 minutes
-    contentCache.set(cacheKey, allResults, 5 * 60 * 1000);
+    const searchResults = await Promise.all(searchPromises);
+    searchResults.forEach(results => allResults.push(...results));
     
-    return allResults;
+    // Apply relevance scoring and ranking
+    const scoredResults = relevanceService.calculateRelevance(query, allResults);
+    const topResults = relevanceService.getTopResults(scoredResults, 10);
+    const rankedResults = topResults.map(scored => scored.entry);
+    
+    console.log('Relevance scoring applied:', {
+      totalResults: allResults.length,
+      topResults: rankedResults.length,
+      averageScore: relevanceService.getRelevanceSummary(scoredResults).averageScore
+    });
+    
+    // Cache the ranked results for 5 minutes
+    await redisCache.set(cacheKey, rankedResults, 5 * 60 * 1000);
+    
+    return rankedResults;
   }
 
   async getContentTypes(): Promise<string[]> {
@@ -239,28 +257,35 @@ ${additionalFields}`;
   }
 }
 
-// LLM Provider functions
+// LLM Provider functions with retry mechanisms
 async function callOpenAI(message: string, apiKey: string, model: string = 'gpt-3.5-turbo') {
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
+  return retryService.executeWithRetry(
+    async () => {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'user', content: message }],
+          max_tokens: 1000,
+          temperature: 0.7,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`OpenAI API error: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data.choices[0].message.content;
     },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: 'user', content: message }],
-      max_tokens: 1000,
-      temperature: 0.7,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`OpenAI API error: ${response.statusText}`);
-  }
-
-  const data = await response.json();
-  return data.choices[0].message.content;
+    {
+      retryCondition: retryService.isRetryableLLMError
+    }
+  );
 }
 
 async function callGroq(message: string, apiKey: string, model: string = 'llama3-8b-8192') {
@@ -465,7 +490,7 @@ export async function POST(req: NextRequest) {
       content: response,
       searchResults: searchResults.length > 0 ? searchResults : undefined,
       metadata: {
-        cached: contentstackService ? contentCache.has(contentCache.generateKey(message, contentTypes || ['tour', 'faqs'], contentstackEnvironment || 'development')) : false,
+        cached: contentstackService ? await redisCache.has(redisCache.generateKey(message, contentTypes || ['tour', 'faqs'], contentstackEnvironment || 'development')) : false,
         rateLimitRemaining: rateLimiter.getRemainingRequests(rateLimitKey)
       }
     });
