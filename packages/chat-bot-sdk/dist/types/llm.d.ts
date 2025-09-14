@@ -1,4 +1,4 @@
-export type LLMProvider = 'openai' | 'groq' | 'anthropic';
+export type LLMProvider = 'openai' | 'groq' | 'anthropic' | 'perplexity';
 export interface LLMConfig {
     provider: LLMProvider;
     apiKey: string;

@@ -9,8 +9,8 @@ export default function Home() {
         <div className="flex items-center">
           <ul className="flex gap-6">
             <li><a href="/" className="hover:text-gray-500 dark:hover:text-gray-400">Home</a></li>
-            <li><a href="/about" className="hover:text-gray-500 dark:hover:text-gray-400">About</a></li>
-            <li><a href="/contact" className="hover:text-gray-500 dark:hover:text-gray-400">Contact</a></li>
+            <li><a href="/chat" className="hover:text-gray-500 dark:hover:text-gray-400">Chat</a></li>
+            <li><a href="/chatbot-demo" className="hover:text-gray-500 dark:hover:text-gray-400">Demo</a></li>
           </ul>
           <ThemeToggle />
         </div>
@@ -23,9 +23,14 @@ export default function Home() {
           This is a starter template with Next.js 15 and Tailwind CSS v4.
           You can build modern, responsive apps with ease.
         </p>
-        <button className="mt-8 px-6 py-3 bg-black text-white dark:bg-white dark:text-black font-semibold rounded-lg shadow-md hover:opacity-80">
-          Get Started
-        </button>
+        <div className="flex gap-4 mt-8">
+          <a href="/chatbot-demo" className="px-6 py-3 bg-black text-white dark:bg-white dark:text-black font-semibold rounded-lg shadow-md hover:opacity-80">
+            Try Demo
+          </a>
+          <a href="/chat" className="px-6 py-3 bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-white font-semibold rounded-lg shadow-md hover:opacity-80">
+            View Chat
+          </a>
+        </div>
       </main>
 
       {/* Footer */}

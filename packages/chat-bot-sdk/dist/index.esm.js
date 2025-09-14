@@ -1,4 +1,4 @@
-import require$$0, { useState, useEffect, useCallback } from 'react';
+import require$$0, { useState, useCallback, useRef, useEffect } from 'react';
 
 var jsxRuntime = {exports: {}};
 
@@ -419,8 +419,119 @@ if (process.env.NODE_ENV === 'production') {
 
 var jsxRuntimeExports = jsxRuntime.exports;
 
+function useChatBot(props) {
+    const [state, setState] = useState({
+        messages: [],
+        isLoading: false,
+        error: null
+    });
+    // Conversation context for better responses
+    const getConversationContext = useCallback(() => {
+        const recentMessages = state.messages.slice(-6); // Last 6 messages for context
+        return recentMessages.map(msg => `${msg.role}: ${msg.content}`).join('\n');
+    }, [state.messages]);
+    const sendMessage = useCallback(async (content) => {
+        if (!props.llmProvider || !props.llmApiKey) {
+            setState(prev => (Object.assign(Object.assign({}, prev), { error: 'LLM provider or API key not configured' })));
+            return;
+        }
+        const userMessage = {
+            id: Date.now().toString(),
+            role: 'user',
+            content,
+            timestamp: new Date()
+        };
+        setState(prev => (Object.assign(Object.assign({}, prev), { messages: [...prev.messages, userMessage], isLoading: true, error: null })));
+        try {
+            // Make API call to the chat endpoint
+            const apiResponse = await fetch('/api/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: content,
+                    llmProvider: props.llmProvider,
+                    llmApiKey: props.llmApiKey,
+                    llmModel: props.llmModel,
+                    enableStreaming: props.enableStreaming,
+                    contentstackApiKey: props.contentstackApiKey,
+                    contentstackToken: props.contentstackToken,
+                    contentstackEnvironment: props.contentstackEnvironment,
+                    contentTypes: props.contentTypes,
+                    conversationContext: getConversationContext()
+                }),
+            });
+            if (!apiResponse.ok) {
+                const errorData = await apiResponse.json().catch(() => ({}));
+                throw new Error(errorData.error || `HTTP error! status: ${apiResponse.status}`);
+            }
+            const data = await apiResponse.json();
+            const response = data.content;
+            const assistantMessage = {
+                id: (Date.now() + 1).toString(),
+                role: 'assistant',
+                content: response,
+                timestamp: new Date()
+            };
+            setState(prev => (Object.assign(Object.assign({}, prev), { messages: [...prev.messages, assistantMessage], isLoading: false })));
+        }
+        catch (error) {
+            setState(prev => (Object.assign(Object.assign({}, prev), { isLoading: false, error: error instanceof Error ? error.message : 'Failed to send message' })));
+        }
+    }, [props.llmProvider, props.llmApiKey, props.llmModel, props.enableStreaming]);
+    const clearMessages = useCallback(() => {
+        setState(prev => (Object.assign(Object.assign({}, prev), { messages: [] })));
+    }, []);
+    const clearError = useCallback(() => {
+        setState(prev => (Object.assign(Object.assign({}, prev), { error: null })));
+    }, []);
+    return Object.assign(Object.assign({}, state), { sendMessage,
+        clearMessages,
+        clearError });
+}
+
 function ChatBot(props) {
-    return (jsxRuntimeExports.jsxs("div", { className: "chat-bot-container", children: [jsxRuntimeExports.jsx("div", { className: "chat-bot-header", children: jsxRuntimeExports.jsx("h3", { children: "Chat Bot" }) }), jsxRuntimeExports.jsx("div", { className: "chat-bot-messages", children: jsxRuntimeExports.jsx("p", { children: "Chat bot component - coming soon!" }) }), jsxRuntimeExports.jsxs("div", { className: "chat-bot-input", children: [jsxRuntimeExports.jsx("input", { type: "text", placeholder: "Type your message...", disabled: true }), jsxRuntimeExports.jsx("button", { disabled: true, children: "Send" })] })] }));
+    const [input, setInput] = useState('');
+    const messagesEndRef = useRef(null);
+    const { messages, isLoading, error, sendMessage, clearMessages, clearError } = useChatBot(props);
+    const scrollToBottom = () => {
+        var _a;
+        (_a = messagesEndRef.current) === null || _a === void 0 ? void 0 : _a.scrollIntoView({ behavior: 'smooth' });
+    };
+    useEffect(() => {
+        scrollToBottom();
+    }, [messages]);
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!input.trim() || isLoading)
+            return;
+        const message = input.trim();
+        setInput('');
+        await sendMessage(message);
+    };
+    const handleKeyPress = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSubmit(e);
+        }
+    };
+    const positionClasses = {
+        'bottom-right': 'fixed bottom-4 right-4',
+        'bottom-left': 'fixed bottom-4 left-4',
+        'top-right': 'fixed top-4 right-4',
+        'top-left': 'fixed top-4 left-4',
+    };
+    const themeClasses = {
+        light: 'bg-white text-gray-900 border-gray-200',
+        dark: 'bg-gray-800 text-white border-gray-600',
+        auto: 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-200 dark:border-gray-600'
+    };
+    return (jsxRuntimeExports.jsxs("div", { className: `${positionClasses[props.position || 'bottom-right']} w-80 h-96 flex flex-col rounded-lg shadow-lg border ${themeClasses[props.theme || 'auto']}`, children: [jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-600", children: [jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [jsxRuntimeExports.jsx("div", { className: "w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center", children: jsxRuntimeExports.jsx("span", { className: "text-white text-sm font-bold", children: "\uD83E\uDD16" }) }), jsxRuntimeExports.jsxs("div", { children: [jsxRuntimeExports.jsx("h3", { className: "text-lg font-semibold", children: "Chat Bot" }), jsxRuntimeExports.jsx("p", { className: "text-xs text-gray-500 dark:text-gray-400", children: "Powered by AI" })] })] }), jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [jsxRuntimeExports.jsx("button", { onClick: clearMessages, className: "text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700", title: "Clear conversation", children: "Clear" }), jsxRuntimeExports.jsx("button", { onClick: () => { }, className: "text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700", title: "Minimize", children: "\u2212" })] })] }), jsxRuntimeExports.jsxs("div", { className: "flex-1 overflow-y-auto p-4 space-y-4", children: [messages.length === 0 && (jsxRuntimeExports.jsxs("div", { className: "text-center text-gray-500 dark:text-gray-400", children: [jsxRuntimeExports.jsx("p", { children: "Start a conversation!" }), jsxRuntimeExports.jsx("p", { className: "text-sm mt-1", children: "Ask me anything..." })] })), messages.map((message) => (jsxRuntimeExports.jsx("div", { className: `flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`, children: jsxRuntimeExports.jsxs("div", { className: `flex items-start gap-2 max-w-xs ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`, children: [jsxRuntimeExports.jsx("div", { className: `w-6 h-6 rounded-full flex items-center justify-center text-xs ${message.role === 'user'
+                                        ? 'bg-blue-500 text-white'
+                                        : 'bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300'}`, children: message.role === 'user' ? '👤' : '🤖' }), jsxRuntimeExports.jsxs("div", { className: `px-3 py-2 rounded-lg ${message.role === 'user'
+                                        ? 'bg-blue-500 text-white rounded-br-sm'
+                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-sm'}`, children: [jsxRuntimeExports.jsx("p", { className: "text-sm whitespace-pre-wrap leading-relaxed", children: message.content }), jsxRuntimeExports.jsx("p", { className: "text-xs opacity-70 mt-1", children: message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })] })] }) }, message.id))), isLoading && (jsxRuntimeExports.jsx("div", { className: "flex justify-start", children: jsxRuntimeExports.jsx("div", { className: "bg-gray-100 dark:bg-gray-700 rounded-lg px-3 py-2", children: jsxRuntimeExports.jsxs("div", { className: "flex space-x-1", children: [jsxRuntimeExports.jsx("div", { className: "w-2 h-2 bg-gray-400 rounded-full animate-bounce" }), jsxRuntimeExports.jsx("div", { className: "w-2 h-2 bg-gray-400 rounded-full animate-bounce", style: { animationDelay: '0.1s' } }), jsxRuntimeExports.jsx("div", { className: "w-2 h-2 bg-gray-400 rounded-full animate-bounce", style: { animationDelay: '0.2s' } })] }) }) })), jsxRuntimeExports.jsx("div", { ref: messagesEndRef })] }), error && (jsxRuntimeExports.jsx("div", { className: "px-4 py-2 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 text-sm", children: jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center", children: [jsxRuntimeExports.jsx("span", { children: error }), jsxRuntimeExports.jsx("button", { onClick: clearError, className: "text-red-500 hover:text-red-700", children: "\u00D7" })] }) })), jsxRuntimeExports.jsx("form", { onSubmit: handleSubmit, className: "p-4 border-t border-gray-200 dark:border-gray-600", children: jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [jsxRuntimeExports.jsx("input", { type: "text", value: input, onChange: (e) => setInput(e.target.value), onKeyPress: handleKeyPress, placeholder: props.placeholder || "Type your message...", disabled: isLoading, className: "flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white" }), jsxRuntimeExports.jsx("button", { type: "submit", disabled: !input.trim() || isLoading, className: "px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed", children: "Send" })] }) })] }));
 }
 
 function ThemeToggle() {
@@ -444,19 +555,6 @@ function ThemeToggle() {
         }
     };
     return (jsxRuntimeExports.jsx("button", { onClick: toggleTheme, className: "ml-4 px-4 py-2 rounded-lg bg-gray-200 text-black dark:bg-gray-800 dark:text-white", children: dark ? "☀️ Light" : "🌙 Dark" }));
-}
-
-function useChatBot() {
-    const [state, setState] = useState({
-        messages: [],
-        isLoading: false,
-        error: null
-    });
-    const sendMessage = async (content) => {
-        // TODO: Implement message sending
-        console.log('Sending message:', content);
-    };
-    return Object.assign(Object.assign({}, state), { sendMessage });
 }
 
 function useLLMProvider() {
