@@ -1,8 +1,9 @@
 export interface ContentstackConfig {
   apiKey: string;
-  token: string;
+  deliveryToken: string;
   environment?: string;
   region?: string;
+  contentTypes?: string[];
 }
 
 export interface ContentItem {

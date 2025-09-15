@@ -1,110 +1,219 @@
 "use client"
-import React from 'react';
-import { LLMProvider } from '../types/llm';
+import React, { useState } from 'react';
+import { LLMProvider, LLMConfig } from '../types/llm';
 
 interface LLMProviderSelectorProps {
-  value: LLMProvider;
-  onChange: (provider: LLMProvider) => void;
-  disabled?: boolean;
+  selectedProvider: LLMProvider;
+  onProviderChange: (provider: LLMProvider) => void;
+  onConfigChange: (config: LLMConfig) => void;
+  config: LLMConfig;
   className?: string;
+  theme?: 'light' | 'dark' | 'auto';
 }
 
 const providerInfo = {
   openai: {
     name: 'OpenAI',
-    description: 'GPT-4, GPT-3.5 Turbo',
+    description: 'GPT-3.5, GPT-4, and other OpenAI models',
     icon: '🤖',
-    color: 'bg-green-500'
+    models: ['gpt-3.5-turbo', 'gpt-4', 'gpt-4-turbo'],
+    defaultModel: 'gpt-3.5-turbo'
   },
   groq: {
     name: 'Groq',
-    description: 'Llama 3, Mixtral',
+    description: 'Fast inference with Llama models',
     icon: '⚡',
-    color: 'bg-blue-500'
+    models: ['llama3-8b-8192', 'llama3-70b-8192', 'mixtral-8x7b-32768'],
+    defaultModel: 'llama3-8b-8192'
   },
   anthropic: {
     name: 'Anthropic',
-    description: 'Claude 3 Opus, Sonnet, Haiku',
+    description: 'Claude models for advanced reasoning',
     icon: '🧠',
-    color: 'bg-purple-500'
+    models: ['claude-3-haiku-20240307', 'claude-3-sonnet-20240229', 'claude-3-opus-20240229'],
+    defaultModel: 'claude-3-haiku-20240307'
   },
   perplexity: {
     name: 'Perplexity',
-    description: 'Real-time web search',
+    description: 'Real-time web search capabilities',
     icon: '🔍',
-    color: 'bg-orange-500'
+    models: ['llama-3.1-sonar-small-128k-online', 'llama-3.1-sonar-large-128k-online'],
+    defaultModel: 'llama-3.1-sonar-small-128k-online'
   }
 };
 
-export default function LLMProviderSelector({ 
-  value, 
-  onChange, 
-  disabled = false, 
-  className = '' 
+export default function LLMProviderSelector({
+  selectedProvider,
+  onProviderChange,
+  onConfigChange,
+  config,
+  className = '',
+  theme = 'auto'
 }: LLMProviderSelectorProps) {
-  const providers = Object.keys(providerInfo) as LLMProvider[];
+  const [isOpen, setIsOpen] = useState(false);
+
+  const themeClasses = {
+    light: 'bg-white text-gray-900 border-gray-200',
+    dark: 'bg-gray-800 text-white border-gray-600',
+    auto: 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-200 dark:border-gray-600'
+  };
+
+  const handleProviderSelect = (provider: LLMProvider) => {
+    const providerData = providerInfo[provider];
+    onProviderChange(provider);
+    onConfigChange({
+      ...config,
+      model: providerData.defaultModel
+    });
+    setIsOpen(false);
+  };
+
+  const handleModelChange = (model: string) => {
+    onConfigChange({
+      ...config,
+      model
+    });
+  };
+
+  const handleApiKeyChange = (apiKey: string) => {
+    onConfigChange({
+      ...config,
+      apiKey
+    });
+  };
+
+  const selectedProviderData = providerInfo[selectedProvider];
 
   return (
-    <div className={`space-y-3 ${className}`}>
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-        LLM Provider
-      </label>
-      
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {providers.map((provider) => {
-          const info = providerInfo[provider];
-          const isSelected = value === provider;
-          
-          return (
+    <div className={`relative ${className}`}>
+      {/* Provider Selector */}
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-2">LLM Provider</label>
+          <div className="relative">
             <button
-              key={provider}
               type="button"
-              onClick={() => !disabled && onChange(provider)}
-              disabled={disabled}
-              className={`
-                relative p-4 rounded-lg border-2 transition-all duration-200
-                ${isSelected 
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
-                  : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
-                }
-                ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-                ${!disabled && !isSelected ? 'hover:shadow-md' : ''}
-              `}
+              onClick={() => setIsOpen(!isOpen)}
+              className={`w-full px-4 py-3 border rounded-lg flex items-center justify-between ${themeClasses[theme]} hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors`}
             >
-              <div className="flex items-center space-x-3">
-                <div className={`
-                  w-10 h-10 rounded-full flex items-center justify-center text-white text-lg
-                  ${info.color}
-                `}>
-                  {info.icon}
-                </div>
-                
-                <div className="flex-1 text-left">
-                  <div className="font-medium text-gray-900 dark:text-white">
-                    {info.name}
-                  </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xl">{selectedProviderData.icon}</span>
+                <div className="text-left">
+                  <div className="font-medium">{selectedProviderData.name}</div>
                   <div className="text-sm text-gray-500 dark:text-gray-400">
-                    {info.description}
+                    {selectedProviderData.description}
                   </div>
                 </div>
-                
-                {isSelected && (
-                  <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center">
-                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                )}
               </div>
+              <svg
+                className={`w-5 h-5 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
             </button>
-          );
-        })}
-      </div>
-      
-      <div className="text-xs text-gray-500 dark:text-gray-400">
-        Choose the LLM provider that best fits your needs. Each provider has different models and pricing.
+
+            {isOpen && (
+              <div className={`absolute top-full left-0 right-0 mt-1 border rounded-lg shadow-lg z-10 ${themeClasses[theme]}`}>
+                {Object.entries(providerInfo).map(([key, provider]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => handleProviderSelect(key as LLMProvider)}
+                    className={`w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
+                      selectedProvider === key ? 'bg-blue-50 dark:bg-blue-900' : ''
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl">{provider.icon}</span>
+                      <div>
+                        <div className="font-medium">{provider.name}</div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400">
+                          {provider.description}
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Model Selection */}
+        <div>
+          <label className="block text-sm font-medium mb-2">Model</label>
+          <select
+            value={config.model || selectedProviderData.defaultModel}
+            onChange={(e) => handleModelChange(e.target.value)}
+            className={`w-full px-4 py-3 border rounded-lg ${themeClasses[theme]} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+          >
+            {selectedProviderData.models.map((model) => (
+              <option key={model} value={model}>
+                {model}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* API Key */}
+        <div>
+          <label className="block text-sm font-medium mb-2">
+            API Key
+            <span className="text-red-500 ml-1">*</span>
+          </label>
+          <input
+            type="password"
+            value={config.apiKey || ''}
+            onChange={(e) => handleApiKeyChange(e.target.value)}
+            placeholder={`Enter your ${selectedProviderData.name} API key`}
+            className={`w-full px-4 py-3 border rounded-lg ${themeClasses[theme]} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+          />
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            Your API key is stored locally and never shared
+          </p>
+        </div>
+
+        {/* Advanced Settings */}
+        <details className="group">
+          <summary className="cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
+            Advanced Settings
+          </summary>
+          <div className="mt-3 space-y-3 pl-4 border-l-2 border-gray-200 dark:border-gray-600">
+            <div>
+              <label className="block text-sm font-medium mb-1">Temperature</label>
+              <input
+                type="range"
+                min="0"
+                max="2"
+                step="0.1"
+                value={config.temperature || 0.7}
+                onChange={(e) => onConfigChange({ ...config, temperature: parseFloat(e.target.value) })}
+                className="w-full"
+              />
+              <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <span>Focused (0)</span>
+                <span>Balanced (1)</span>
+                <span>Creative (2)</span>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Max Tokens</label>
+              <input
+                type="number"
+                min="100"
+                max="4000"
+                value={config.maxTokens || 1000}
+                onChange={(e) => onConfigChange({ ...config, maxTokens: parseInt(e.target.value) })}
+                className={`w-full px-3 py-2 border rounded ${themeClasses[theme]} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+              />
+            </div>
+          </div>
+        </details>
       </div>
     </div>
   );
 }
-

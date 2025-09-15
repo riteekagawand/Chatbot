@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Travel Assistant Chatbot</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            height: 100vh;
+            background: #f8f9fa;
+        }
+        
+        .chatbot-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            max-width: 400px;
+            margin: 0 auto;
+            background: white;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        
+        .chatbot-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .chatbot-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .chatbot-subtitle {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .chatbot-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .message {
+            max-width: 85%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            word-wrap: break-word;
+            line-height: 1.4;
+        }
+        
+        .message.user {
+            background: #667eea;
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+        
+        .message.assistant {
+            background: #f1f3f4;
+            color: #333;
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+        
+        .typing-indicator {
+            display: none;
+            align-self: flex-start;
+            background: #f1f3f4;
+            padding: 12px 16px;
+            border-radius: 18px;
+            border-bottom-left-radius: 4px;
+        }
+        
+        .typing-dots {
+            display: flex;
+            gap: 4px;
+        }
+        
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background: #999;
+            border-radius: 50%;
+            animation: typing 1.4s infinite ease-in-out;
+        }
+        
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        
+        @keyframes typing {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+        
+        .chatbot-input-container {
+            padding: 20px;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 10px;
+            background: white;
+        }
+        
+        .chatbot-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid #ddd;
+            border-radius: 25px;
+            outline: none;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        
+        .chatbot-input:focus {
+            border-color: #667eea;
+        }
+        
+        .chatbot-send {
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s;
+        }
+        
+        .chatbot-send:hover {
+            background: #5a6fd8;
+        }
+        
+        .chatbot-send:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .welcome-message {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+        
+        .status-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #4caf50;
+        }
+        
+        .status-indicator.offline {
+            background: #f44336;
+        }
+        
+        .error-message {
+            background: #ffebee;
+            color: #c62828;
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="chatbot-container">
+        <div class="chatbot-header">
+            <div class="status-indicator" id="statusIndicator"></div>
+            <div class="chatbot-title">🌍 Travel Assistant</div>
+            <div class="chatbot-subtitle">Ask me about tours, FAQs, or travel planning</div>
+        </div>
+        
+        <div class="chatbot-messages" id="chatbotMessages">
+            <div class="welcome-message">
+                Hi! I'm your AI travel assistant. I can help you with information about our tours, answer FAQs, and assist with travel planning. How can I help you today?
+            </div>
+        </div>
+        
+        <div class="typing-indicator" id="typingIndicator">
+            <div class="typing-dots">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+        </div>
+        
+        <div class="chatbot-input-container">
+            <input 
+                type="text" 
+                class="chatbot-input" 
+                id="chatbotInput" 
+                placeholder="Ask me about tours, FAQs, or travel..."
+                onkeypress="handleKeyPress(event)"
+            >
+            <button class="chatbot-send" id="chatbotSend" onclick="sendMessage()">→</button>
+        </div>
+    </div>
+    
+    <script>
+        // Contentstack Configuration
+        const CONTENTSTACK_CONFIG = {
+            apiKey: 'blt354ba6a0b8b7e140',
+            deliveryToken: 'cs7f1c6103726d54fe1978f31f',
+            environment: 'development',
+            baseUrl: 'https://eu-cdn.contentstack.com/v3'
+        };
+        
+        let isConnected = false;
+        
+        // Check Contentstack connection
+        async function checkConnection() {
+            const statusIndicator = document.getElementById('statusIndicator');
+            
+            try {
+                const url = `${CONTENTSTACK_CONFIG.baseUrl}/content_types?environment=${CONTENTSTACK_CONFIG.environment}`;
+                const response = await fetch(url, {
+                    headers: {
+                        'api_key': CONTENTSTACK_CONFIG.apiKey,
+                        'access_token': CONTENTSTACK_CONFIG.deliveryToken,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    isConnected = true;
+                    statusIndicator.classList.remove('offline');
+                    console.log('Connected to Contentstack');
+                    return true;
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                console.error('Contentstack connection failed:', error);
+                isConnected = false;
+                statusIndicator.classList.add('offline');
+                return false;
+            }
+        }
+        
+        // Fetch data from Contentstack
+        async function fetchFromContentstack(contentType, query = '') {
+            try {
+                let url = `${CONTENTSTACK_CONFIG.baseUrl}/content_types/${contentType}/entries?environment=${CONTENTSTACK_CONFIG.environment}&limit=10`;
+                
+                if (query) {
+                    // Enhanced search for better matching
+                    const searchQuery = JSON.stringify({
+                        "$or": [
+                            {"title": {"$regex": query, "$options": "i"}},
+                            {"question": {"$regex": query, "$options": "i"}},
+                            {"description": {"$regex": query, "$options": "i"}},
+                            {"answers": {"$regex": query, "$options": "i"}},
+                            {"answer": {"$regex": query, "$options": "i"}}
+                        ]
+                    });
+                    url += `&query=${encodeURIComponent(searchQuery)}`;
+                }
+                
+                const response = await fetch(url, {
+                    headers: {
+                        'api_key': CONTENTSTACK_CONFIG.apiKey,
+                        'access_token': CONTENTSTACK_CONFIG.deliveryToken,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                return data.entries || [];
+                
+            } catch (error) {
+                console.error(`Error fetching ${contentType}:`, error);
+                return [];
+            }
+        }
+        
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+        
+        async function sendMessage() {
+            const input = document.getElementById('chatbotInput');
+            const sendButton = document.getElementById('chatbotSend');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            // Disable input while processing
+            input.disabled = true;
+            sendButton.disabled = true;
+            
+            // Add user message to chat
+            addMessage(message, 'user');
+            input.value = '';
+            
+            // Show typing indicator
+            showTypingIndicator();
+            
+            try {
+                const response = await generateResponse(message);
+                hideTypingIndicator();
+                addMessage(response, 'assistant');
+                
+            } catch (error) {
+                console.error('Error generating response:', error);
+                hideTypingIndicator();
+                addMessage('Sorry, I encountered an error while fetching data from our database. Please try again.', 'assistant');
+            } finally {
+                // Re-enable input
+                input.disabled = false;
+                sendButton.disabled = false;
+                input.focus();
+            }
+        }
+        
+        async function generateResponse(message) {
+            const lowerMessage = message.toLowerCase();
+            
+            // Check for tour-related questions
+            if (lowerMessage.includes('how many tours') || lowerMessage.includes('number of tours') || lowerMessage.includes('total tours')) {
+                const tours = await fetchFromContentstack('tour');
+                return `We currently have ${tours.length} amazing tours available:\n\n${tours.map((tour, index) => 
+                    `${index + 1}. **${tour.title}** (${tour.country || 'N/A'}) - $${tour.price || 'N/A'} for ${tour.duration || 'N/A'}`
+                ).join('\n')}\n\nWould you like more details about any specific tour?`;
+            }
+            
+            if (lowerMessage.includes('tour') && (lowerMessage.includes('swiss') || lowerMessage.includes('alps'))) {
+                const tours = await fetchFromContentstack('tour', 'swiss');
+                if (tours.length > 0) {
+                    const tour = tours[0];
+                    return `**${tour.title}**\n\n${tour.description || 'No description available'}\n\n📍 **Country:** ${tour.country || 'N/A'}\n💰 **Price:** $${tour.price || 'N/A'}\n⏱️ **Duration:** ${tour.duration || 'N/A'}\n\nWould you like to know more about booking this tour?`;
+                }
+                return "I couldn't find information about Swiss Alps tours in our database. Please try asking about our available tours.";
+            }
+            
+            if (lowerMessage.includes('tour') && (lowerMessage.includes('italy') || lowerMessage.includes('rome') || lowerMessage.includes('venice'))) {
+                const tours = await fetchFromContentstack('tour', 'italy');
+                if (tours.length > 0) {
+                    const tour = tours[0];
+                    return `**${tour.title}**\n\n${tour.description || 'No description available'}\n\n📍 **Country:** ${tour.country || 'N/A'}\n💰 **Price:** $${tour.price || 'N/A'}\n⏱️ **Duration:** ${tour.duration || 'N/A'}\n\nWould you like more information about this tour?`;
+                }
+                return "I couldn't find information about Italy tours in our database. Please try asking about our available tours.";
+            }
+            
+            if (lowerMessage.includes('tour') && (lowerMessage.includes('france') || lowerMessage.includes('riviera'))) {
+                const tours = await fetchFromContentstack('tour', 'france');
+                if (tours.length > 0) {
+                    const tour = tours[0];
+                    return `**${tour.title}**\n\n${tour.description || 'No description available'}\n\n📍 **Country:** ${tour.country || 'N/A'}\n💰 **Price:** $${tour.price || 'N/A'}\n⏱️ **Duration:** ${tour.duration || 'N/A'}\n\nWould you like to know more about this tour?`;
+                }
+                return "I couldn't find information about France tours in our database. Please try asking about our available tours.";
+            }
+            
+            // Check for FAQ-related questions
+            if (lowerMessage.includes('book') || lowerMessage.includes('booking')) {
+                const faqs = await fetchFromContentstack('faqs', 'book');
+                if (faqs.length > 0) {
+                    const faq = faqs[0];
+                    return `**${faq.question || faq.title}**\n\n${faq.answers || faq.answer || 'No answer available'}\n\nIs there anything else you'd like to know about booking?`;
+                }
+                return "I couldn't find booking information in our FAQ database. Please contact our support team for assistance.";
+            }
+            
+            if (lowerMessage.includes('payment') || lowerMessage.includes('pay')) {
+                const faqs = await fetchFromContentstack('faqs', 'payment');
+                if (faqs.length > 0) {
+                    const faq = faqs[0];
+                    return `**${faq.question || faq.title}**\n\n${faq.answers || faq.answer || 'No answer available'}\n\nDo you have any other questions about payments?`;
+                }
+                return "I couldn't find payment information in our FAQ database. Please contact our support team for assistance.";
+            }
+            
+            if (lowerMessage.includes('cancel') || lowerMessage.includes('cancellation')) {
+                const faqs = await fetchFromContentstack('faqs', 'cancel');
+                if (faqs.length > 0) {
+                    const faq = faqs[0];
+                    return `**${faq.question || faq.title}**\n\n${faq.answers || faq.answer || 'No answer available'}\n\nIs there anything else you'd like to know about our policies?`;
+                }
+                return "I couldn't find cancellation information in our FAQ database. Please contact our support team for assistance.";
+            }
+            
+            if (lowerMessage.includes('refund')) {
+                const faqs = await fetchFromContentstack('faqs', 'refund');
+                if (faqs.length > 0) {
+                    const faq = faqs[0];
+                    return `**${faq.question || faq.title}**\n\n${faq.answers || faq.answer || 'No answer available'}\n\nDo you have any other questions about refunds?`;
+                }
+                return "I couldn't find refund information in our FAQ database. Please contact our support team for assistance.";
+            }
+            
+            if (lowerMessage.includes('flight') || lowerMessage.includes('airline')) {
+                const faqs = await fetchFromContentstack('faqs', 'flight');
+                if (faqs.length > 0) {
+                    const faq = faqs[0];
+                    return `**${faq.question || faq.title}**\n\n${faq.answers || faq.answer || 'No answer available'}\n\nWould you like help with flight bookings?`;
+                }
+                return "I couldn't find flight information in our FAQ database. Please contact our support team for assistance.";
+            }
+            
+            if (lowerMessage.includes('accommodation') || lowerMessage.includes('hotel') || lowerMessage.includes('accomodation') || lowerMessage.includes('provide') || lowerMessage.includes('type of')) {
+                // Get all FAQs and search manually for accommodation-related content
+                const allFaqs = await fetchFromContentstack('faqs');
+                const accommodationFaqs = allFaqs.filter(faq => 
+                    (faq.question && faq.question.toLowerCase().includes('accommodation')) ||
+                    (faq.answers && faq.answers.toLowerCase().includes('accommodation')) ||
+                    (faq.answer && faq.answer.toLowerCase().includes('accommodation')) ||
+                    (faq.title && faq.title.toLowerCase().includes('accommodation'))
+                );
+                
+                if (accommodationFaqs.length > 0) {
+                    const faq = accommodationFaqs[0];
+                    return `**${faq.question || faq.title}**\n\n${faq.answers || faq.answer || 'No answer available'}\n\nDo you have any specific accommodation preferences?`;
+                }
+                return "I couldn't find accommodation information in our FAQ database. Please contact our support team for assistance.";
+            }
+            
+            if (lowerMessage.includes('insurance')) {
+                const faqs = await fetchFromContentstack('faqs', 'insurance');
+                if (faqs.length > 0) {
+                    const faq = faqs[0];
+                    return `**${faq.question || faq.title}**\n\n${faq.answers || faq.answer || 'No answer available'}\n\nWould you like recommendations for travel insurance providers?`;
+                }
+                return "I couldn't find insurance information in our FAQ database. Please contact our support team for assistance.";
+            }
+            
+            if (lowerMessage.includes('emergency') || lowerMessage.includes('contact')) {
+                const faqs = await fetchFromContentstack('faqs', 'emergency');
+                if (faqs.length > 0) {
+                    const faq = faqs[0];
+                    return `**${faq.question || faq.title}**\n\n${faq.answers || faq.answer || 'No answer available'}\n\nIs there anything else you'd like to know about our support?`;
+                }
+                return "I couldn't find emergency contact information in our FAQ database. Please contact our support team for assistance.";
+            }
+            
+            // General responses
+            if (lowerMessage.includes('hello') || lowerMessage.includes('hi') || lowerMessage.includes('hey')) {
+                const tours = await fetchFromContentstack('tour');
+                return `Hello! I'm your travel assistant. I can help you with:\n\n• Information about our ${tours.length} tours\n• Answering frequently asked questions\n• Travel planning assistance\n\nWhat would you like to know?`;
+            }
+            
+            if (lowerMessage.includes('help')) {
+                return `I'm here to help! You can ask me about:\n\n**Tours:**\n• "How many tours do you have?"\n• "Tell me about the Swiss Alps tour"\n• "What tours do you have in Italy?"\n\n**General Questions:**\n• "How do I book a tour?"\n• "What's your cancellation policy?"\n• "What payment methods do you accept?"\n\nWhat would you like to know?`;
+            }
+            
+            // Default response - try to find relevant content
+            const allTours = await fetchFromContentstack('tour');
+            const allFaqs = await fetchFromContentstack('faqs');
+            
+            return `I understand you're asking about "${message}". I can help you with information about our ${allTours.length} tours and ${allFaqs.length} frequently asked questions. Could you be more specific? For example:\n\n• "How many tours do you have?"\n• "Tell me about your tours"\n• "How do I book a tour?"\n• "What's your cancellation policy?"\n\nWhat would you like to know?`;
+        }
+        
+        function addMessage(text, sender) {
+            const messagesContainer = document.getElementById('chatbotMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            messageDiv.textContent = text;
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
+        function showTypingIndicator() {
+            document.getElementById('typingIndicator').style.display = 'flex';
+        }
+        
+        function hideTypingIndicator() {
+            document.getElementById('typingIndicator').style.display = 'none';
+        }
+        
+        // Initialize chatbot
+        async function init() {
+            await checkConnection();
+            document.getElementById('chatbotInput').focus();
+        }
+        
+        // Initialize when page loads
+        init();
+    </script>
+</body>
+</html>

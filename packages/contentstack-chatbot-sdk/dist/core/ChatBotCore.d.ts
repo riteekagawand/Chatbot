@@ -1,0 +1,33 @@
+import { ChatBotConfig, ChatBotState, ChatBotEvents, ChatBotInstance } from '../types';
+export declare class ChatBotCore implements ChatBotInstance {
+    private config;
+    private state;
+    private events;
+    private contentstackService;
+    private responseGenerator;
+    private container;
+    private chatElement;
+    constructor(config: ChatBotConfig, events?: ChatBotEvents);
+    private initializeState;
+    mount(container: HTMLElement): void;
+    unmount(): void;
+    open(): void;
+    close(): void;
+    sendMessage(message: string): Promise<void>;
+    getState(): ChatBotState;
+    updateConfig(newConfig: Partial<ChatBotConfig>): void;
+    destroy(): void;
+    private setState;
+    private addMessage;
+    private createChatElement;
+    private getPositionStyles;
+    private render;
+    private renderChatWindow;
+    private renderHeader;
+    private renderMessages;
+    private renderInput;
+    private renderChatButton;
+    private getThemeStyles;
+    private attachEventListeners;
+    private handleSendMessage;
+}

@@ -19,6 +19,9 @@ export class LLMService {
         return adapter;
     }
     async sendMessage(message, config) {
+        if (!config.provider) {
+            throw new Error('LLM provider is required');
+        }
         const adapter = this.getAdapter(config.provider);
         const response = await adapter.sendMessage(message, config.apiKey, config.model);
         return response.content;
@@ -26,6 +29,9 @@ export class LLMService {
     sendStreamingMessage(message, config) {
         return __asyncGenerator(this, arguments, function* sendStreamingMessage_1() {
             var _a, e_1, _b, _c;
+            if (!config.provider) {
+                throw new Error('LLM provider is required');
+            }
             const adapter = this.getAdapter(config.provider);
             try {
                 for (var _d = true, _e = __asyncValues(adapter.sendStreamingMessage(message, config.apiKey, config.model)), _f; _f = yield __await(_e.next()), _a = _f.done, !_a; _d = true) {

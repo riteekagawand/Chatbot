@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Travel Assistant Chatbot</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            height: 100vh;
+            background: #f8f9fa;
+        }
+        
+        .chatbot-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            max-width: 400px;
+            margin: 0 auto;
+            background: white;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        
+        .chatbot-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .chatbot-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .chatbot-subtitle {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .chatbot-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .message {
+            max-width: 85%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            word-wrap: break-word;
+            line-height: 1.4;
+        }
+        
+        .message.user {
+            background: #667eea;
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+        
+        .message.assistant {
+            background: #f1f3f4;
+            color: #333;
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+        
+        .typing-indicator {
+            display: none;
+            align-self: flex-start;
+            background: #f1f3f4;
+            padding: 12px 16px;
+            border-radius: 18px;
+            border-bottom-left-radius: 4px;
+        }
+        
+        .typing-dots {
+            display: flex;
+            gap: 4px;
+        }
+        
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background: #999;
+            border-radius: 50%;
+            animation: typing 1.4s infinite ease-in-out;
+        }
+        
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        
+        @keyframes typing {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+        
+        .chatbot-input-container {
+            padding: 20px;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 10px;
+            background: white;
+        }
+        
+        .chatbot-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid #ddd;
+            border-radius: 25px;
+            outline: none;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        
+        .chatbot-input:focus {
+            border-color: #667eea;
+        }
+        
+        .chatbot-send {
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s;
+        }
+        
+        .chatbot-send:hover {
+            background: #5a6fd8;
+        }
+        
+        .chatbot-send:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .welcome-message {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="chatbot-container">
+        <div class="chatbot-header">
+            <div class="chatbot-title">🌍 Travel Assistant</div>
+            <div class="chatbot-subtitle">Ask me about tours, FAQs, or travel planning</div>
+        </div>
+        
+        <div class="chatbot-messages" id="chatbotMessages">
+            <div class="welcome-message">
+                Hi! I'm your AI travel assistant. I can help you with information about our tours, answer FAQs, and assist with travel planning. How can I help you today?
+            </div>
+        </div>
+        
+        <div class="typing-indicator" id="typingIndicator">
+            <div class="typing-dots">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+        </div>
+        
+        <div class="chatbot-input-container">
+            <input 
+                type="text" 
+                class="chatbot-input" 
+                id="chatbotInput" 
+                placeholder="Ask me about tours, FAQs, or travel..."
+                onkeypress="handleKeyPress(event)"
+            >
+            <button class="chatbot-send" id="chatbotSend" onclick="sendMessage()">→</button>
+        </div>
+    </div>
+    
+    <script>
+        // Your Contentstack data (from the terminal logs)
+        const CONTENTSTACK_DATA = {
+            tours: [
+                {
+                    title: "Swiss Alps Adventure",
+                    description: "Hiking and skiing in the breathtaking Alps.",
+                    country: "Switzerland",
+                    price: 1800,
+                    duration: "10 Days"
+                },
+                {
+                    title: "Italy Explorer",
+                    description: "A 7-day guided tour covering Rome, Venice, and Florence.",
+                    country: "Italy",
+                    price: 1200,
+                    duration: "7 Days"
+                },
+                {
+                    title: "French Riviera Escape",
+                    description: "Relax along the Mediterranean coast with luxury resorts and beaches.",
+                    country: "France",
+                    price: 1500,
+                    duration: "5 days"
+                }
+            ],
+            faqs: [
+                {
+                    question: "How can I book a tour?",
+                    answer: "You can book a tour directly on our website by selecting your preferred destination and dates. Once you complete the payment, you will receive a confirmation email."
+                },
+                {
+                    question: "What payment methods do you accept?",
+                    answer: "We accept all major credit/debit cards, UPI, net banking, and wallets. International payments can be made via PayPal."
+                },
+                {
+                    question: "What is your cancellation policy?",
+                    answer: "You can cancel up to 7 days before the departure date for a full refund. Cancellations made within 7 days may incur a partial fee."
+                },
+                {
+                    question: "How long does it take to process a refund?",
+                    answer: "Refunds are usually processed within 7–10 business days, depending on your bank or payment provider."
+                },
+                {
+                    question: "Are flights included in the tour packages?",
+                    answer: "Unless mentioned, flights are not included. However, we can help you book flights at the best available rates."
+                },
+                {
+                    question: "What type of accommodation is provided?",
+                    answer: "We offer 3-star and 4-star hotels with options to upgrade based on your preference."
+                },
+                {
+                    question: "Is travel insurance included in the package?",
+                    answer: "Travel insurance is not included by default, but we highly recommend purchasing one before your trip."
+                },
+                {
+                    question: "Who do I contact in case of emergencies during the tour?",
+                    answer: "You will be assigned a dedicated tour manager, whose contact details will be shared in your booking confirmation."
+                }
+            ]
+        };
+        
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+        
+        async function sendMessage() {
+            const input = document.getElementById('chatbotInput');
+            const sendButton = document.getElementById('chatbotSend');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            // Disable input while processing
+            input.disabled = true;
+            sendButton.disabled = true;
+            
+            // Add user message to chat
+            addMessage(message, 'user');
+            input.value = '';
+            
+            // Show typing indicator
+            showTypingIndicator();
+            
+            // Simulate processing time
+            setTimeout(() => {
+                const response = generateResponse(message);
+                hideTypingIndicator();
+                addMessage(response, 'assistant');
+                
+                // Re-enable input
+                input.disabled = false;
+                sendButton.disabled = false;
+                input.focus();
+            }, 1000);
+        }
+        
+        function generateResponse(message) {
+            const lowerMessage = message.toLowerCase();
+            
+            // Check for tour-related questions
+            if (lowerMessage.includes('how many tours') || lowerMessage.includes('number of tours') || lowerMessage.includes('total tours')) {
+                return `We currently have ${CONTENTSTACK_DATA.tours.length} amazing tours available:\n\n${CONTENTSTACK_DATA.tours.map((tour, index) => 
+                    `${index + 1}. **${tour.title}** (${tour.country}) - $${tour.price} for ${tour.duration}`
+                ).join('\n')}\n\nWould you like more details about any specific tour?`;
+            }
+            
+            if (lowerMessage.includes('tour') && (lowerMessage.includes('swiss') || lowerMessage.includes('alps'))) {
+                const tour = CONTENTSTACK_DATA.tours[0];
+                return `**${tour.title}**\n\n${tour.description}\n\n📍 **Country:** ${tour.country}\n💰 **Price:** $${tour.price}\n⏱️ **Duration:** ${tour.duration}\n\nThis is our most popular adventure tour! Would you like to know more about booking or have any other questions?`;
+            }
+            
+            if (lowerMessage.includes('tour') && (lowerMessage.includes('italy') || lowerMessage.includes('rome') || lowerMessage.includes('venice'))) {
+                const tour = CONTENTSTACK_DATA.tours[1];
+                return `**${tour.title}**\n\n${tour.description}\n\n📍 **Country:** ${tour.country}\n💰 **Price:** $${tour.price}\n⏱️ **Duration:** ${tour.duration}\n\nPerfect for history and culture lovers! Would you like more information about this tour?`;
+            }
+            
+            if (lowerMessage.includes('tour') && (lowerMessage.includes('france') || lowerMessage.includes('riviera'))) {
+                const tour = CONTENTSTACK_DATA.tours[2];
+                return `**${tour.title}**\n\n${tour.description}\n\n📍 **Country:** ${tour.country}\n💰 **Price:** $${tour.price}\n⏱️ **Duration:** ${tour.duration}\n\nGreat for a relaxing getaway! Would you like to know more about this tour?`;
+            }
+            
+            // Check for FAQ-related questions
+            if (lowerMessage.includes('book') || lowerMessage.includes('booking')) {
+                const faq = CONTENTSTACK_DATA.faqs.find(f => f.question.toLowerCase().includes('book'));
+                return `**${faq.question}**\n\n${faq.answer}\n\nIs there anything else you'd like to know about booking?`;
+            }
+            
+            if (lowerMessage.includes('payment') || lowerMessage.includes('pay')) {
+                const faq = CONTENTSTACK_DATA.faqs.find(f => f.question.toLowerCase().includes('payment'));
+                return `**${faq.question}**\n\n${faq.answer}\n\nDo you have any other questions about payments?`;
+            }
+            
+            if (lowerMessage.includes('cancel') || lowerMessage.includes('cancellation')) {
+                const faq = CONTENTSTACK_DATA.faqs.find(f => f.question.toLowerCase().includes('cancel'));
+                return `**${faq.question}**\n\n${faq.answer}\n\nIs there anything else you'd like to know about our policies?`;
+            }
+            
+            if (lowerMessage.includes('refund')) {
+                const faq = CONTENTSTACK_DATA.faqs.find(f => f.question.toLowerCase().includes('refund'));
+                return `**${faq.question}**\n\n${faq.answer}\n\nDo you have any other questions about refunds?`;
+            }
+            
+            if (lowerMessage.includes('flight') || lowerMessage.includes('airline')) {
+                const faq = CONTENTSTACK_DATA.faqs.find(f => f.question.toLowerCase().includes('flight'));
+                return `**${faq.question}**\n\n${faq.answer}\n\nWould you like help with flight bookings?`;
+            }
+            
+            if (lowerMessage.includes('accommodation') || lowerMessage.includes('hotel')) {
+                const faq = CONTENTSTACK_DATA.faqs.find(f => f.question.toLowerCase().includes('accommodation'));
+                return `**${faq.question}**\n\n${faq.answer}\n\nDo you have any specific accommodation preferences?`;
+            }
+            
+            if (lowerMessage.includes('insurance')) {
+                const faq = CONTENTSTACK_DATA.faqs.find(f => f.question.toLowerCase().includes('insurance'));
+                return `**${faq.question}**\n\n${faq.answer}\n\nWould you like recommendations for travel insurance providers?`;
+            }
+            
+            if (lowerMessage.includes('emergency') || lowerMessage.includes('contact')) {
+                const faq = CONTENTSTACK_DATA.faqs.find(f => f.question.toLowerCase().includes('emergency'));
+                return `**${faq.question}**\n\n${faq.answer}\n\nIs there anything else you'd like to know about our support?`;
+            }
+            
+            // General responses
+            if (lowerMessage.includes('hello') || lowerMessage.includes('hi') || lowerMessage.includes('hey')) {
+                return `Hello! I'm your travel assistant. I can help you with:\n\n• Information about our ${CONTENTSTACK_DATA.tours.length} tours\n• Answering frequently asked questions\n• Travel planning assistance\n\nWhat would you like to know?`;
+            }
+            
+            if (lowerMessage.includes('help')) {
+                return `I'm here to help! You can ask me about:\n\n**Tours:**\n• "How many tours do you have?"\n• "Tell me about the Swiss Alps tour"\n• "What tours do you have in Italy?"\n\n**General Questions:**\n• "How do I book a tour?"\n• "What's your cancellation policy?"\n• "What payment methods do you accept?"\n\nWhat would you like to know?`;
+            }
+            
+            // Default response
+            return `I understand you're asking about "${message}". I can help you with information about our tours and frequently asked questions. Could you be more specific? For example:\n\n• "How many tours do you have?"\n• "Tell me about your tours"\n• "How do I book a tour?"\n• "What's your cancellation policy?"\n\nWhat would you like to know?`;
+        }
+        
+        function addMessage(text, sender) {
+            const messagesContainer = document.getElementById('chatbotMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            messageDiv.textContent = text;
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
+        function showTypingIndicator() {
+            document.getElementById('typingIndicator').style.display = 'flex';
+        }
+        
+        function hideTypingIndicator() {
+            document.getElementById('typingIndicator').style.display = 'none';
+        }
+        
+        // Focus on input when page loads
+        document.getElementById('chatbotInput').focus();
+    </script>
+</body>
+</html>

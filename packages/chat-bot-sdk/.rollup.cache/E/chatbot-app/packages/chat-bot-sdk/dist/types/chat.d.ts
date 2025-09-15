@@ -1,13 +1,16 @@
 export interface ChatBotProps {
-    llmProvider?: 'openai' | 'groq' | 'anthropic';
+    llmProvider?: 'openai' | 'groq' | 'anthropic' | 'perplexity';
     llmApiKey?: string;
     llmModel?: string;
+    llmTemperature?: number;
+    llmMaxTokens?: number;
     contentstackApiKey?: string;
     contentstackToken?: string;
     contentstackEnvironment?: string;
     theme?: 'light' | 'dark' | 'auto';
     position?: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
     placeholder?: string;
+    title?: string;
     contentTypes?: string[];
     maxMessages?: number;
     enableStreaming?: boolean;

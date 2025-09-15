@@ -1,8 +1,10 @@
 export interface ChatBotProps {
   // LLM Configuration
-  llmProvider?: 'openai' | 'groq' | 'anthropic';
+  llmProvider?: 'openai' | 'groq' | 'anthropic' | 'perplexity';
   llmApiKey?: string;
   llmModel?: string;
+  llmTemperature?: number;
+  llmMaxTokens?: number;
   
   // Contentstack Configuration
   contentstackApiKey?: string;
@@ -13,6 +15,7 @@ export interface ChatBotProps {
   theme?: 'light' | 'dark' | 'auto';
   position?: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
   placeholder?: string;
+  title?: string;
   
   // Advanced Configuration
   contentTypes?: string[];

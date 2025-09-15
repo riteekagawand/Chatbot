@@ -24,12 +24,18 @@ export class LLMService {
   }
 
   async sendMessage(message: string, config: LLMConfig): Promise<string> {
+    if (!config.provider) {
+      throw new Error('LLM provider is required');
+    }
     const adapter = this.getAdapter(config.provider);
     const response = await adapter.sendMessage(message, config.apiKey, config.model);
     return response.content;
   }
 
   async* sendStreamingMessage(message: string, config: LLMConfig): AsyncGenerator<string> {
+    if (!config.provider) {
+      throw new Error('LLM provider is required');
+    }
     const adapter = this.getAdapter(config.provider);
     for await (const chunk of adapter.sendStreamingMessage(message, config.apiKey, config.model)) {
       if (!chunk.done) {

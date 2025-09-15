@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contentstack ChatBot SDK - Vanilla JS Example</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        
+        .code-block {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 16px;
+            margin: 16px 0;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Contentstack ChatBot SDK</h1>
+        <p>This is a demo of the universal Contentstack ChatBot SDK working with vanilla JavaScript.</p>
+        
+        <h2>Features:</h2>
+        <ul>
+            <li>✅ Universal compatibility - works with any framework</li>
+            <li>✅ Real-time Contentstack integration</li>
+            <li>✅ Smart responses based on your content</li>
+            <li>✅ Customizable themes and positions</li>
+            <li>✅ TypeScript support</li>
+        </ul>
+        
+        <h2>Try asking:</h2>
+        <ul>
+            <li>"What type of accommodation do you provide?"</li>
+            <li>"How many tours do you have?"</li>
+            <li>"How can I book a tour?"</li>
+            <li>"What's your cancellation policy?"</li>
+        </ul>
+        
+        <h2>Code Example:</h2>
+        <div class="code-block">
+import { ContentstackChatBot } from 'contentstack-chatbot-sdk';
+
+const chatbot = ContentstackChatBot.create({
+  contentstack: {
+    apiKey: 'your-api-key',
+    deliveryToken: 'your-delivery-token',
+    environment: 'development'
+  },
+  title: 'Travel Assistant',
+  placeholder: 'Ask me about tours and travel...'
+});
+
+chatbot.mount(document.body);
+        </div>
+    </div>
+
+    <script type="module">
+        // This would be the actual import in a real project
+        // import { ContentstackChatBot } from 'contentstack-chatbot-sdk';
+        
+        // For demo purposes, we'll simulate the SDK
+        class MockContentstackChatBot {
+            static create(config) {
+                return new MockChatBot(config);
+            }
+        }
+        
+        class MockChatBot {
+            constructor(config) {
+                this.config = config;
+                this.element = null;
+            }
+            
+            mount(container) {
+                this.element = this.createChatElement();
+                container.appendChild(this.element);
+            }
+            
+            createChatElement() {
+                const div = document.createElement('div');
+                div.innerHTML = `
+                    <div style="
+                        position: fixed;
+                        bottom: 20px;
+                        right: 20px;
+                        z-index: 1000;
+                    ">
+                        <button onclick="alert('Chatbot would open here!')" style="
+                            width: 60px;
+                            height: 60px;
+                            border-radius: 50%;
+                            background: #007bff;
+                            color: white;
+                            border: none;
+                            cursor: pointer;
+                            font-size: 24px;
+                            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                        ">💬</button>
+                    </div>
+                `;
+                return div;
+            }
+        }
+        
+        // Initialize the chatbot
+        const chatbot = MockContentstackChatBot.create({
+            contentstack: {
+                apiKey: 'blt354ba6a0b8b7e140',
+                deliveryToken: 'cs7f1c6103726d54fe1978f31f',
+                environment: 'development'
+            },
+            title: 'Travel Assistant',
+            placeholder: 'Ask me about tours and travel...'
+        });
+        
+        chatbot.mount(document.body);
+    </script>
+</body>
+</html>

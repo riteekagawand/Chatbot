@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Travel Website with Chatbot</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+        
+        .header h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        .content {
+            background: white;
+            border-radius: 15px;
+            padding: 40px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 40px;
+        }
+        
+        .tours-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-top: 30px;
+        }
+        
+        .tour-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            border-left: 4px solid #667eea;
+            transition: transform 0.3s ease;
+        }
+        
+        .tour-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .tour-card h3 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .tour-card p {
+            color: #666;
+            line-height: 1.6;
+        }
+        
+        .chatbot-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            width: 400px;
+            height: 600px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .chatbot-toggle {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            background: #667eea;
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+            z-index: 1001;
+        }
+        
+        .chatbot-toggle:hover {
+            background: #5a6fd8;
+            transform: scale(1.1);
+        }
+        
+        .chatbot-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: none;
+        }
+        
+        .chatbot-iframe.active {
+            display: block;
+        }
+        
+        .close-chatbot {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: #666;
+            cursor: pointer;
+            z-index: 1002;
+        }
+        
+        @media (max-width: 768px) {
+            .chatbot-container {
+                width: 100%;
+                height: 100vh;
+                bottom: 0;
+                right: 0;
+                border-radius: 0;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌍 Travel Adventures</h1>
+            <p>Discover amazing destinations with our expert-guided tours</p>
+        </div>
+        
+        <div class="content">
+            <h2>Featured Tours</h2>
+            <p>Explore our handpicked selection of incredible travel experiences. Our AI assistant can help you find the perfect tour and answer any questions you might have!</p>
+            
+            <div class="tours-grid">
+                <div class="tour-card">
+                    <h3>🇨🇭 Swiss Alps Adventure</h3>
+                    <p>Experience the breathtaking beauty of the Swiss Alps with hiking and skiing adventures. Perfect for nature lovers and adventure seekers.</p>
+                    <p><strong>Duration:</strong> 10 Days | <strong>Price:</strong> $1,800</p>
+                </div>
+                
+                <div class="tour-card">
+                    <h3>🇮🇹 Italy Explorer</h3>
+                    <p>Discover the rich history and culture of Italy with visits to Rome, Venice, and Florence. A perfect blend of art, history, and cuisine.</p>
+                    <p><strong>Duration:</strong> 7 Days | <strong>Price:</strong> $1,200</p>
+                </div>
+                
+                <div class="tour-card">
+                    <h3>🇫🇷 French Riviera Escape</h3>
+                    <p>Relax along the stunning Mediterranean coast with luxury resorts and beautiful beaches. The perfect getaway for relaxation.</p>
+                    <p><strong>Duration:</strong> 5 Days | <strong>Price:</strong> $1,500</p>
+                </div>
+            </div>
+            
+            <div style="margin-top: 40px; padding: 20px; background: #e3f2fd; border-radius: 10px; text-align: center;">
+                <h3>💬 Need Help Choosing?</h3>
+                <p>Our AI travel assistant is here to help! Click the chat button in the bottom right corner to get personalized recommendations and answers to your questions.</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Chatbot Toggle Button -->
+    <button class="chatbot-toggle" onclick="toggleChatbot()">
+        💬
+    </button>
+    
+    <!-- Chatbot Container -->
+    <div class="chatbot-container" id="chatbotContainer">
+        <button class="close-chatbot" onclick="toggleChatbot()">×</button>
+        <iframe 
+            class="chatbot-iframe" 
+            id="chatbotIframe"
+            src="http://localhost:3000/chatbot-demo"
+            title="Travel Assistant Chatbot">
+        </iframe>
+    </div>
+    
+    <script>
+        function toggleChatbot() {
+            const container = document.getElementById('chatbotContainer');
+            const iframe = document.getElementById('chatbotIframe');
+            const toggle = document.querySelector('.chatbot-toggle');
+            
+            if (container.style.display === 'none' || container.style.display === '') {
+                container.style.display = 'block';
+                iframe.classList.add('active');
+                toggle.style.display = 'none';
+            } else {
+                container.style.display = 'none';
+                iframe.classList.remove('active');
+                toggle.style.display = 'block';
+            }
+        }
+        
+        // Initialize chatbot as hidden
+        document.getElementById('chatbotContainer').style.display = 'none';
+    </script>
+</body>
+</html>

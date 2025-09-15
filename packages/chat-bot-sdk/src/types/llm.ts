@@ -1,10 +1,12 @@
 export type LLMProvider = 'openai' | 'groq' | 'anthropic' | 'perplexity';
 
 export interface LLMConfig {
-  provider: LLMProvider;
+  provider?: LLMProvider;
   apiKey: string;
   model?: string;
   baseUrl?: string;
+  temperature?: number;
+  maxTokens?: number;
 }
 
 export interface LLMResponse {
