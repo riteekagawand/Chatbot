@@ -5,6 +5,36 @@ export class ResponseGenerator implements IResponseGenerator {
     const { tours, faqs } = content;
     const lowerMessage = message.toLowerCase();
 
+    // Price intent: price | prize | cost | fees | how much
+    if (/\b(price|prize|cost|fees|how much)\b/i.test(lowerMessage)) {
+      const tokens = lowerMessage
+        .replace(/[^a-z0-9\s]/gi, ' ')
+        .split(/\s+/)
+        .filter(t => t.length > 1);
+
+      const scored = tours.map(t => {
+        const title = (t.title || '').toLowerCase();
+        const score = tokens.reduce((s, tok) => s + (title.includes(tok) ? 1 : 0), 0);
+        return { t, score };
+      }).sort((a, b) => b.score - a.score);
+
+      const best = scored[0]?.score ? scored[0].t : null;
+      if (best) {
+        if (best.price != null) {
+          return `The price of “${best.title}” is $${best.price}.`;
+        }
+        return `I couldn’t find a price for “${best.title}”. Would you like other details (duration, country)?`;
+      }
+
+      const priced = tours.filter(t => t.price != null).slice(0, 3);
+      if (priced.length > 0) {
+        const list = priced.map(t => `• ${t.title} — $${t.price}`).join('\n');
+        return `Here are some tour prices:\n\n${list}\n\nWhich tour would you like a price for?`;
+      }
+
+      return 'Could you specify the tour name so I can give you the exact price?';
+    }
+
     // Handle specific queries
     if (lowerMessage.includes('how many tours') || lowerMessage.includes('tour count')) {
       return `We currently have ${tours.length} amazing tours available! Would you like to know more about any specific destination?`;

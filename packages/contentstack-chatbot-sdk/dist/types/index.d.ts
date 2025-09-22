@@ -17,6 +17,7 @@ export interface ChatBotConfig {
     showWelcomeMessage?: boolean;
     welcomeMessage?: string;
 }
+export type AgentConfig = ChatBotConfig;
 export interface Message {
     id: string;
     text: string;

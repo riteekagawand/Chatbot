@@ -149,7 +149,7 @@ var ContentstackService = /** @class */ (function () {
                         _a.trys.push([0, 2, , 3]);
                         params = {
                             environment: this.config.environment,
-                            limit: 10
+                            limit: 50
                         };
                         if (query) {
                             searchQuery = JSON.stringify({
@@ -178,7 +178,7 @@ var ContentstackService = /** @class */ (function () {
     };
     ContentstackService.prototype.searchContent = function (message) {
         return __awaiter(this, void 0, void 0, function () {
-            var lowerMessage, _a, tours, faqs, relevantTours, relevantFaqs, error_3;
+            var lowerMessage, isPriceIntent, _a, tours, faqs, relevantTours, relevantFaqs, error_3;
             return __generator(this, function (_b) {
                 switch (_b.label) {
                     case 0:
@@ -186,8 +186,9 @@ var ContentstackService = /** @class */ (function () {
                         _b.label = 1;
                     case 1:
                         _b.trys.push([1, 3, , 4]);
+                        isPriceIntent = /\b(price|prize|cost|fees|how much)\b/i.test(lowerMessage);
                         return [4 /*yield*/, Promise.all([
-                                this.fetchEntries('tour'),
+                                this.fetchEntries('tour', isPriceIntent ? message : undefined),
                                 this.fetchEntries('faqs')
                             ])];
                     case 2:
@@ -259,8 +260,34 @@ var ResponseGenerator = /** @class */ (function () {
     function ResponseGenerator() {
     }
     ResponseGenerator.prototype.generateResponse = function (message, content) {
+        var _a;
         var tours = content.tours, faqs = content.faqs;
         var lowerMessage = message.toLowerCase();
+        // Price intent: price | prize | cost | fees | how much
+        if (/\b(price|prize|cost|fees|how much)\b/i.test(lowerMessage)) {
+            var tokens_1 = lowerMessage
+                .replace(/[^a-z0-9\s]/gi, ' ')
+                .split(/\s+/)
+                .filter(function (t) { return t.length > 1; });
+            var scored = tours.map(function (t) {
+                var title = (t.title || '').toLowerCase();
+                var score = tokens_1.reduce(function (s, tok) { return s + (title.includes(tok) ? 1 : 0); }, 0);
+                return { t: t, score: score };
+            }).sort(function (a, b) { return b.score - a.score; });
+            var best = ((_a = scored[0]) === null || _a === void 0 ? void 0 : _a.score) ? scored[0].t : null;
+            if (best) {
+                if (best.price != null) {
+                    return "The price of \u201C".concat(best.title, "\u201D is $").concat(best.price, ".");
+                }
+                return "I couldn\u2019t find a price for \u201C".concat(best.title, "\u201D. Would you like other details (duration, country)?");
+            }
+            var priced = tours.filter(function (t) { return t.price != null; }).slice(0, 3);
+            if (priced.length > 0) {
+                var list = priced.map(function (t) { return "\u2022 ".concat(t.title, " \u2014 $").concat(t.price); }).join('\n');
+                return "Here are some tour prices:\n\n".concat(list, "\n\nWhich tour would you like a price for?");
+            }
+            return 'Could you specify the tour name so I can give you the exact price?';
+        }
         // Handle specific queries
         if (lowerMessage.includes('how many tours') || lowerMessage.includes('tour count')) {
             return "We currently have ".concat(tours.length, " amazing tours available! Would you like to know more about any specific destination?");
@@ -981,7 +1008,7 @@ if (process.env.NODE_ENV === 'production') {
 var jsxRuntimeExports = jsxRuntime.exports;
 
 var ReactChatBot = function (_a) {
-    var onMessage = _a.onMessage, onStateChange = _a.onStateChange, onError = _a.onError, onOpen = _a.onOpen, onClose = _a.onClose, config = __rest(_a, ["onMessage", "onStateChange", "onError", "onOpen", "onClose"]);
+    var agentId = _a.agentId, configUrl = _a.configUrl, onMessage = _a.onMessage, onStateChange = _a.onStateChange, onError = _a.onError, onOpen = _a.onOpen, onClose = _a.onClose, config = __rest(_a, ["agentId", "configUrl", "onMessage", "onStateChange", "onError", "onOpen", "onClose"]);
     var containerRef = useRef(null);
     var chatbotRef = useRef(null);
     var _b = useState({
@@ -990,8 +1017,55 @@ var ReactChatBot = function (_a) {
         isLoading: false,
         isConnected: true
     }); _b[0]; var setState = _b[1];
+    var _c = useState(null), resolvedConfig = _c[0], setResolvedConfig = _c[1];
+    // Resolve configuration: agentId → fetch; else window → fallback; else props
     useEffect(function () {
-        if (!containerRef.current)
+        var cancelled = false;
+        var resolve = function () { return __awaiter(void 0, void 0, void 0, function () {
+            var url, res, data, w, e_1;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        _a.trys.push([0, 4, , 5]);
+                        if (!agentId) return [3 /*break*/, 3];
+                        url = configUrl || "/api/agents/".concat(agentId, "/config");
+                        return [4 /*yield*/, fetch(url, { credentials: 'include' })];
+                    case 1:
+                        res = _a.sent();
+                        if (!res.ok)
+                            throw new Error("Failed to load agent config: ".concat(res.status));
+                        return [4 /*yield*/, res.json()];
+                    case 2:
+                        data = _a.sent();
+                        if (!cancelled)
+                            setResolvedConfig(data);
+                        return [2 /*return*/];
+                    case 3:
+                        w = typeof window !== 'undefined' ? window : undefined;
+                        if (w && w.ContentstackChatBotConfig && w.ContentstackChatBotConfig.agentConfig) {
+                            if (!cancelled)
+                                setResolvedConfig(w.ContentstackChatBotConfig.agentConfig);
+                            return [2 /*return*/];
+                        }
+                        // 3) Fallback to props-based config
+                        if (!cancelled)
+                            setResolvedConfig(config);
+                        return [3 /*break*/, 5];
+                    case 4:
+                        e_1 = _a.sent();
+                        onError === null || onError === void 0 ? void 0 : onError(e_1);
+                        if (!cancelled)
+                            setResolvedConfig(config);
+                        return [3 /*break*/, 5];
+                    case 5: return [2 /*return*/];
+                }
+            });
+        }); };
+        resolve();
+        return function () { cancelled = true; };
+    }, [agentId, configUrl]);
+    useEffect(function () {
+        if (!containerRef.current || !resolvedConfig)
             return;
         var events = {
             onMessage: function (message) {
@@ -1012,18 +1086,18 @@ var ReactChatBot = function (_a) {
                 onClose === null || onClose === void 0 ? void 0 : onClose();
             }
         };
-        chatbotRef.current = new ChatBotCore(config, events);
+        chatbotRef.current = new ChatBotCore(resolvedConfig, events);
         chatbotRef.current.mount(containerRef.current);
         return function () {
             var _a;
             (_a = chatbotRef.current) === null || _a === void 0 ? void 0 : _a.destroy();
         };
-    }, []);
+    }, [resolvedConfig]);
     useEffect(function () {
-        if (chatbotRef.current) {
-            chatbotRef.current.updateConfig(config);
+        if (chatbotRef.current && resolvedConfig) {
+            chatbotRef.current.updateConfig(resolvedConfig);
         }
-    }, [config]);
+    }, [resolvedConfig]);
     return jsxRuntimeExports.jsx("div", { ref: containerRef });
 };
 

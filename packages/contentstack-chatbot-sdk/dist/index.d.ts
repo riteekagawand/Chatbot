@@ -19,6 +19,7 @@ interface ChatBotConfig {
     showWelcomeMessage?: boolean;
     welcomeMessage?: string;
 }
+type AgentConfig = ChatBotConfig;
 interface Message {
     id: string;
     text: string;
@@ -131,7 +132,9 @@ declare class ResponseGenerator implements ResponseGenerator$1 {
     }): string;
 }
 
-interface ReactChatBotProps extends ChatBotConfig {
+interface ReactChatBotProps extends Partial<ChatBotConfig> {
+    agentId?: string;
+    configUrl?: string;
     onMessage?: (message: any) => void;
     onStateChange?: (state: ChatBotState) => void;
     onError?: (error: Error) => void;
@@ -149,4 +152,4 @@ declare class ContentstackChatBot {
 }
 
 export { ChatBotCore, ContentstackChatBot, ContentstackService, ReactChatBot, ResponseGenerator, ContentstackChatBot as default };
-export type { ChatBotConfig, ChatBotEvents, ChatBotInstance, ChatBotState, ContentstackConfig, ContentstackEntry, Message };
+export type { AgentConfig, ChatBotConfig, ChatBotEvents, ChatBotInstance, ChatBotState, ContentstackConfig, ContentstackEntry, Message };

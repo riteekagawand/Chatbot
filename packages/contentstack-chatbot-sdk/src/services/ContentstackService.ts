@@ -47,7 +47,7 @@ export class ContentstackService implements IContentstackService {
     try {
       const params: any = {
         environment: this.config.environment,
-        limit: 10
+        limit: 50
       };
 
       if (query) {
@@ -75,9 +75,10 @@ export class ContentstackService implements IContentstackService {
     const lowerMessage = message.toLowerCase();
     
     try {
+      const isPriceIntent = /\b(price|prize|cost|fees|how much)\b/i.test(lowerMessage);
       // Fetch tours and FAQs in parallel
       const [tours, faqs] = await Promise.all([
-        this.fetchEntries('tour'),
+        this.fetchEntries('tour', isPriceIntent ? message : undefined),
         this.fetchEntries('faqs')
       ]);
 

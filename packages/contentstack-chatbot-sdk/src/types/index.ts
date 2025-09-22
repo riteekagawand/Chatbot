@@ -19,6 +19,9 @@ export interface ChatBotConfig {
   welcomeMessage?: string;
 }
 
+// Optional agent-resolved configuration (same shape as ChatBotConfig)
+export type AgentConfig = ChatBotConfig;
+
 export interface Message {
   id: string;
   text: string;
