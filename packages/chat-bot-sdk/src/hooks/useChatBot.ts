@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useStreaming } from './useStreaming';
 import { ChatState, Message, ChatBotProps } from '../types/chat';
 
 export function useChatBot(props: ChatBotProps) {
@@ -35,7 +36,36 @@ export function useChatBot(props: ChatBotProps) {
     }));
 
     try {
-      // Make API call to the chat endpoint
+      if (props.enableStreaming) {
+        const { startStreaming } = useStreaming();
+        await startStreaming(content, '/api/chat', {
+          onChunk: (chunk) => {
+            setState(prev => {
+              const last = prev.messages[prev.messages.length - 1];
+              if (last && last.role === 'assistant' && (last as any).isStreaming) {
+                const updated = { ...last, content: (last.content || '') + chunk } as any;
+                return { ...prev, messages: [...prev.messages.slice(0, -1), updated] };
+              }
+              const assistantMessage: Message = {
+                id: (Date.now() + 1).toString(),
+                role: 'assistant',
+                content: chunk,
+                timestamp: new Date()
+              } as any;
+              return { ...prev, messages: [...prev.messages, assistantMessage] };
+            });
+          },
+          onError: (err) => {
+            setState(prev => ({ ...prev, isLoading: false, error: err.message }));
+          },
+          onComplete: () => {
+            setState(prev => ({ ...prev, isLoading: false }));
+          }
+        });
+        return;
+      }
+
+      // Non-streaming fallback
       const apiResponse = await fetch('/api/chat', {
         method: 'POST',
         headers: {
@@ -46,7 +76,7 @@ export function useChatBot(props: ChatBotProps) {
           llmProvider: props.llmProvider,
           llmApiKey: props.llmApiKey,
           llmModel: props.llmModel,
-          enableStreaming: props.enableStreaming,
+          enableStreaming: false,
           contentstackApiKey: props.contentstackApiKey,
           contentstackToken: props.contentstackToken,
           contentstackEnvironment: props.contentstackEnvironment,
@@ -57,37 +87,29 @@ export function useChatBot(props: ChatBotProps) {
 
       if (!apiResponse.ok) {
         const errorData = await apiResponse.json().catch(() => ({}));
-        
-        // Handle specific error types
         if (errorData.type === 'RATE_LIMIT') {
           throw new Error(`Rate limit exceeded. Please wait ${errorData.retryAfter || 60} seconds before trying again.`);
         }
-        
         if (errorData.type === 'AUTH_ERROR') {
           throw new Error('Invalid API credentials. Please check your API key and try again.');
         }
-        
         if (errorData.type === 'CONTENT_ERROR') {
           throw new Error('Content service temporarily unavailable. Please try again later.');
         }
-        
         if (errorData.type === 'TIMEOUT_ERROR') {
           throw new Error('Request timeout. Please try again.');
         }
-        
         throw new Error(errorData.error || `HTTP error! status: ${apiResponse.status}`);
       }
 
       const data = await apiResponse.json();
       const response = data.content;
-
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
         content: response,
         timestamp: new Date()
       };
-
       setState(prev => ({
         ...prev,
         messages: [...prev.messages, assistantMessage],

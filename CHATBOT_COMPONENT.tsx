@@ -33,6 +33,9 @@ interface ChatBotProps {
   theme?: 'light' | 'dark';
   width?: number;
   height?: number;
+  region?: 'us' | 'eu' | 'azure';
+  contentTypes?: string[];
+  maxResults?: number;
 }
 
 class ContentstackService {
@@ -40,6 +43,7 @@ class ContentstackService {
   private apiKey: string;
   private deliveryToken: string;
   private environment: string;
+  private region: string;
 
   constructor(
     apiKey: string,
@@ -50,6 +54,7 @@ class ContentstackService {
     this.apiKey = apiKey;
     this.deliveryToken = deliveryToken;
     this.environment = environment;
+    this.region = region;
     this.baseUrl = `https://${region}-cdn.contentstack.com/v3`;
   }
 
@@ -90,38 +95,13 @@ class ContentstackService {
     }
   }
 
-  async searchContent(message: string): Promise<{ tours: ContentstackEntry[], faqs: ContentstackEntry[] }> {
-    const lowerMessage = message.toLowerCase();
-    
-    // Fetch tours and FAQs
-    const [tours, faqs] = await Promise.all([
-      this.fetchEntries('tour'),
-      this.fetchEntries('faqs')
-    ]);
-
-    // Filter based on message content
-    const relevantTours = tours.filter(tour => 
-      lowerMessage.includes('tour') || 
-      lowerMessage.includes('travel') ||
-      lowerMessage.includes('destination') ||
-      lowerMessage.includes('country')
-    );
-
-    const relevantFaqs = faqs.filter(faq => {
-      const question = faq.question?.toLowerCase() || '';
-      const answer = faq.answers?.toLowerCase() || faq.answer?.toLowerCase() || '';
-      
-      return lowerMessage.includes('accommodation') && question.includes('accommodation') ||
-             lowerMessage.includes('hotel') && (question.includes('accommodation') || answer.includes('hotel')) ||
-             lowerMessage.includes('booking') && question.includes('book') ||
-             lowerMessage.includes('cancel') && question.includes('cancel') ||
-             lowerMessage.includes('payment') && question.includes('payment') ||
-             lowerMessage.includes('insurance') && question.includes('insurance') ||
-             lowerMessage.includes('flight') && question.includes('flight') ||
-             lowerMessage.includes('refund') && question.includes('refund');
+  async searchAcross(contentTypes: string[], query?: string): Promise<Array<ContentstackEntry & { contentType: string }>> {
+    const tasks = contentTypes.map(async (ct) => {
+      const entries = await this.fetchEntries(ct, query);
+      return entries.map(e => ({ ...e, contentType: ct }));
     });
-
-    return { tours: relevantTours, faqs: relevantFaqs };
+    const results = await Promise.all(tasks);
+    return results.flat();
   }
 }
 
@@ -134,7 +114,9 @@ const ChatBot: React.FC<ChatBotProps> = ({
   position = 'bottom-right',
   theme = 'light',
   width = 350,
-  height = 500
+  height = 500,
+  contentTypes,
+  maxResults
 }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -177,95 +159,20 @@ const ChatBot: React.FC<ChatBotProps> = ({
     }
 
     try {
-      const { tours, faqs } = await contentstackService.current.searchContent(message);
-      const lowerMessage = message.toLowerCase();
+      const entries = await contentstackService.current.searchAcross(contentTypes || ['tour','faqs'], message);
 
-      // Handle specific queries
-      if (lowerMessage.includes('how many tours') || lowerMessage.includes('tour count')) {
-        return `We currently have ${tours.length} amazing tours available! Would you like to know more about any specific destination?`;
+      if (entries.length > 0) {
+        const top = entries.slice(0, maxResults ?? 3);
+        const lines = top.map((e: any) => {
+          const title = e.title || e.question || e.name || 'Untitled';
+          const snippet = (e.description || e.content || e.answer || '').toString();
+          const short = snippet.length > 220 ? snippet.slice(0, 220) + '…' : snippet;
+          return `• ${title}${short ? `\n  ${short}` : ''}${e.contentType ? `\n  Type: ${e.contentType}` : ''}`;
+        }).join('\n\n');
+        return `Here is what I found:\n\n${lines}\n\nAsk for a specific item to get more details.`;
       }
 
-      if (lowerMessage.includes('accommodation') || lowerMessage.includes('hotel') || lowerMessage.includes('provide')) {
-        const accommodationFaq = faqs.find(faq => 
-          faq.question?.toLowerCase().includes('accommodation') ||
-          faq.title?.toLowerCase().includes('accommodation')
-        );
-        if (accommodationFaq) {
-          return `**${accommodationFaq.question || accommodationFaq.title}**\n\n${accommodationFaq.answers || accommodationFaq.answer}\n\nDo you have any specific accommodation preferences?`;
-        }
-      }
-
-      if (lowerMessage.includes('booking') || lowerMessage.includes('book')) {
-        const bookingFaq = faqs.find(faq => 
-          faq.question?.toLowerCase().includes('book')
-        );
-        if (bookingFaq) {
-          return `**${bookingFaq.question}**\n\n${bookingFaq.answers || bookingFaq.answer}\n\nWould you like help with booking a specific tour?`;
-        }
-      }
-
-      if (lowerMessage.includes('cancel')) {
-        const cancelFaq = faqs.find(faq => 
-          faq.question?.toLowerCase().includes('cancel')
-        );
-        if (cancelFaq) {
-          return `**${cancelFaq.question}**\n\n${cancelFaq.answers || cancelFaq.answer}\n\nDo you need help with a specific cancellation?`;
-        }
-      }
-
-      if (lowerMessage.includes('payment')) {
-        const paymentFaq = faqs.find(faq => 
-          faq.question?.toLowerCase().includes('payment')
-        );
-        if (paymentFaq) {
-          return `**${paymentFaq.question}**\n\n${paymentFaq.answers || paymentFaq.answer}\n\nDo you have any other payment questions?`;
-        }
-      }
-
-      if (lowerMessage.includes('insurance')) {
-        const insuranceFaq = faqs.find(faq => 
-          faq.question?.toLowerCase().includes('insurance')
-        );
-        if (insuranceFaq) {
-          return `**${insuranceFaq.question}**\n\n${insuranceFaq.answers || insuranceFaq.answer}\n\nWould you like help finding travel insurance?`;
-        }
-      }
-
-      if (lowerMessage.includes('flight')) {
-        const flightFaq = faqs.find(faq => 
-          faq.question?.toLowerCase().includes('flight')
-        );
-        if (flightFaq) {
-          return `**${flightFaq.question}**\n\n${flightFaq.answers || flightFaq.answer}\n\nWould you like help with flight bookings?`;
-        }
-      }
-
-      if (lowerMessage.includes('refund')) {
-        const refundFaq = faqs.find(faq => 
-          faq.question?.toLowerCase().includes('refund')
-        );
-        if (refundFaq) {
-          return `**${refundFaq.question}**\n\n${refundFaq.answers || refundFaq.answer}\n\nDo you need help with a specific refund?`;
-        }
-      }
-
-      // General tour information
-      if (tours.length > 0) {
-        const tourList = tours.slice(0, 3).map(tour => 
-          `• **${tour.title}** - ${tour.country} (${tour.duration}, $${tour.price})`
-        ).join('\n');
-        
-        return `Here are some of our amazing tours:\n\n${tourList}\n\nWould you like more details about any specific tour?`;
-      }
-
-      // General FAQ response
-      if (faqs.length > 0) {
-        const faq = faqs[0];
-        return `**${faq.question || faq.title}**\n\n${faq.answers || faq.answer}\n\nIs there anything else I can help you with?`;
-      }
-
-      return "I understand you're asking about travel and tours. I can help you with information about our tours, booking, accommodation, and more. Could you be more specific? For example:\n\n• \"How many tours do you have?\"\n• \"Tell me about your tours\"\n• \"How do I book a tour?\"\n• \"What's your cancellation policy?\"\n\nWhat would you like to know?";
-
+      return "I couldn't find relevant content yet. Try rephrasing or ensure your Contentstack content types and environment have published entries.";
     } catch (error) {
       console.error('Error generating response:', error);
       return "I'm having trouble connecting right now. Please try again later.";
@@ -391,7 +298,7 @@ const ChatBot: React.FC<ChatBotProps> = ({
           >
             {messages.length === 0 && (
               <div style={{ textAlign: 'center', color: currentTheme.textColor, opacity: 0.7 }}>
-                👋 Hi! I'm your travel assistant. How can I help you today?
+                👋 Hi! I'm your assistant. Ask about your content and I'll fetch it from Contentstack.
               </div>
             )}
             

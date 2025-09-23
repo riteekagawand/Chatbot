@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { llmConfig } from '../../config/llm';
+import { contentstackConfig } from '../../config/contentstack';
 import { redisCache } from '../../services/cache/redisCache';
 import { rateLimiter } from '../../services/rateLimiter';
 import { retryService } from '../../services/retryService';
@@ -38,7 +40,8 @@ class ContentstackService {
     this.apiKey = credentials.apiKey;
     this.deliveryToken = credentials.deliveryToken;
     this.environment = credentials.environment || 'development';
-    this.baseUrl = 'https://eu-cdn.contentstack.com/v3';
+    const regionKey = (credentials.region || 'us') as keyof typeof contentstackConfig.regions;
+    this.baseUrl = contentstackConfig.regions[regionKey] || contentstackConfig.regions.us;
   }
 
   async searchContent(query: ContentstackQuery): Promise<ContentstackEntry[]> {
@@ -368,7 +371,9 @@ export async function POST(req: NextRequest) {
       contentstackApiKey,
       contentstackToken,
       contentstackEnvironment,
-      contentTypes
+      contentstackRegion,
+      contentTypes,
+      stream
     } = await req.json();
 
     if (!message || !llmProvider || !llmApiKey) {
@@ -405,7 +410,8 @@ export async function POST(req: NextRequest) {
       contentstackService = new ContentstackService({
         apiKey: contentstackApiKey,
         deliveryToken: contentstackToken,
-        environment: contentstackEnvironment || 'development'
+        environment: contentstackEnvironment || 'development',
+        region: contentstackRegion || 'us'
       });
     }
 
@@ -450,26 +456,36 @@ export async function POST(req: NextRequest) {
     // Enhance the message with relevant content and system prompt
     const enhancedMessage = `${systemPrompt}\n\nUser question: ${message}${relevantContent}`;
 
+    // Resolve provider and model defaults
+    let provider = llmProvider;
+    let model = llmModel;
+    if (llmConfig.providers[provider as keyof typeof llmConfig.providers]) {
+      const providerCfg = llmConfig.providers[provider as keyof typeof llmConfig.providers] as any;
+      if (!model) {
+        model = providerCfg.defaultModel;
+      }
+    }
+
     // Make the LLM API call based on the provider
     let response;
     
     try {
-      switch (llmProvider) {
+      switch (provider) {
         case 'openai':
-          response = await callOpenAI(enhancedMessage, llmApiKey, llmModel);
+          response = await callOpenAI(enhancedMessage, llmApiKey, model);
           break;
         case 'groq':
-          response = await callGroq(enhancedMessage, llmApiKey, llmModel);
+          response = await callGroq(enhancedMessage, llmApiKey, model);
           break;
         case 'anthropic':
-          response = await callAnthropic(enhancedMessage, llmApiKey, llmModel);
+          response = await callAnthropic(enhancedMessage, llmApiKey, model);
           break;
         case 'perplexity':
-          response = await callPerplexity(enhancedMessage, llmApiKey, llmModel);
+          response = await callPerplexity(enhancedMessage, llmApiKey, model);
           break;
         default:
           return NextResponse.json(
-            { error: `Unsupported LLM provider: ${llmProvider}` },
+            { error: `Unsupported LLM provider: ${provider}` },
             { status: 400 }
           );
       }
@@ -484,6 +500,49 @@ export async function POST(req: NextRequest) {
       } else {
         throw llmError;
       }
+    }
+
+    // Streaming support via Server-Sent Events (SSE)
+    if (enableStreaming || stream) {
+      const encoder = new TextEncoder();
+      const streamBody = new ReadableStream({
+        start(controller) {
+          // Naive chunking of the full response to simulate streaming
+          const text = String(response || '');
+          const chunkSize = 80;
+          let index = 0;
+          function pushChunk() {
+            if (index >= text.length) {
+              controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
+              controller.close();
+              return;
+            }
+            const next = text.slice(index, index + chunkSize);
+            index += chunkSize;
+            const payload = JSON.stringify({ content: next });
+            controller.enqueue(encoder.encode(`data: ${payload}\n\n`));
+            setTimeout(pushChunk, 20);
+          }
+          // Also include minimal metadata as first message
+          const meta = {
+            model: model,
+            provider: provider,
+            cached: !!(contentstackService && redisCache.has(redisCache.generateKey(message, contentTypes || ['tour', 'faqs'], contentstackEnvironment || 'development')))
+          };
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: meta })}\n\n`));
+          pushChunk();
+        }
+      });
+
+      return new NextResponse(streamBody, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache, no-transform',
+          Connection: 'keep-alive',
+          'X-Accel-Buffering': 'no'
+        }
+      });
     }
 
     return NextResponse.json({ 

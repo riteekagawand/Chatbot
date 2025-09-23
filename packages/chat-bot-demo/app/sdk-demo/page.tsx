@@ -1,4 +1,5 @@
 "use client"
+export const dynamic = 'force-dynamic';
 import React, { useState } from 'react';
 import { 
   EnhancedChatBot, 
@@ -17,6 +18,7 @@ interface ChatConfig {
 }
 
 export default function SDKDemoPage() {
+  const isClient = typeof window !== 'undefined';
   const [config, setConfig] = useState<ChatConfig | null>(null);
   const [showConfig, setShowConfig] = useState(true);
   const [selectedPosition, setSelectedPosition] = useState<'bottom-right' | 'bottom-left' | 'top-right' | 'top-left'>('bottom-right');
@@ -112,7 +114,7 @@ export default function SDKDemoPage() {
                     </div>
                     {config?.contentstack && (
                       <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        Types: {config.contentstack.contentTypes.join(', ')}
+                        Types: {(config.contentstack.contentTypes || []).join(', ')}
                       </p>
                     )}
                   </div>
@@ -202,7 +204,7 @@ export default function SDKDemoPage() {
         </main>
 
         {/* ChatBot Component */}
-        {config && (
+        {config && isClient && (
           <EnhancedChatBot
             llmProvider={config.llm.provider}
             llmApiKey={config.llm.config.apiKey}

@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 export default function ChatBotDemo() {
   const [config, setConfig] = useState({
-    llmProvider: 'openai' as 'openai' | 'groq' | 'anthropic' | 'perplexity' | 'xai',
+    llmProvider: 'openai' as 'openai' | 'groq' | 'anthropic' | 'perplexity',
     llmApiKey: 'test-key',
     llmModel: 'gpt-3.5-turbo',
     theme: 'auto' as 'light' | 'dark' | 'auto',

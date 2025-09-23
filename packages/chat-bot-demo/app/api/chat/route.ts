@@ -34,32 +34,50 @@ class ContentstackService {
     this.apiKey = credentials.apiKey;
     this.deliveryToken = credentials.deliveryToken;
     this.environment = credentials.environment || 'development';
-    this.baseUrl = 'https://eu-cdn.contentstack.com/v3';
+    const region = (credentials.region || process.env.NEXT_PUBLIC_CONTENTSTACK_REGION || 'eu').toLowerCase();
+    this.baseUrl = `https://${region}-cdn.contentstack.com/v3`;
+    
   }
 
-  async searchContent(query: ContentstackQuery): Promise<ContentstackEntry[]> {
+  async searchContent(query: ContentstackQuery & { locale?: string }): Promise<ContentstackEntry[]> {
     try {
       const contentType = query.contentType;
       const searchQuery = query.query || '';
       const limit = query.limit || 10;
       
       let url = `${this.baseUrl}/content_types/${contentType}/entries?environment=${this.environment}&limit=${limit}`;
+      if (query.locale) {
+        url += `&locale=${encodeURIComponent(query.locale)}`;
+      }
       
-      if (searchQuery) {
-        // Use different search fields based on content type
-        let searchField = "title";
-        if (contentType === 'faqs') {
-          searchField = "question";
-        }
-        
-        const query = JSON.stringify({[searchField]:{"$regex":searchQuery,"$options":"i"}});
-        url += `&query=${encodeURIComponent(query)}`;
+      // Build a single Contentstack query combining text search and optional filters
+      const searchOr = searchQuery
+        ? {
+            $or: [
+              { title: { $regex: searchQuery, $options: 'i' } },
+              { question: { $regex: searchQuery, $options: 'i' } },
+              { description: { $regex: searchQuery, $options: 'i' } },
+              { answers: { $regex: searchQuery, $options: 'i' } },
+              { answer: { $regex: searchQuery, $options: 'i' } },
+              { content: { $regex: searchQuery, $options: 'i' } },
+            ],
+          }
+        : undefined;
+
+      let finalQuery: any | undefined = undefined;
+      if (searchOr && query.filters) {
+        finalQuery = { $and: [searchOr, query.filters] };
+      } else if (searchOr) {
+        finalQuery = searchOr;
+      } else if (query.filters) {
+        finalQuery = query.filters;
       }
 
-      if (query.filters) {
-        const filterQuery = JSON.stringify(query.filters);
-        url += `&query=${filterQuery}`;
+      if (finalQuery) {
+        url += `&query=${encodeURIComponent(JSON.stringify(finalQuery))}`;
       }
+
+      
 
       const response = await fetch(url, {
         headers: {
@@ -70,10 +88,11 @@ class ContentstackService {
       });
 
       if (!response.ok) {
-        throw new Error(`Contentstack API error: ${response.statusText}`);
+        
+        throw new Error(`Contentstack API error: ${response.status} ${response.statusText}`);
       }
 
-      const data = await response.json();
+      const data = await response.json().catch(async () => ({ entries: [] }));
       
       return data.entries?.map((entry: any) => ({
         uid: entry.uid,
@@ -214,6 +233,7 @@ export async function POST(req: NextRequest) {
       contentstackApiKey,
       contentstackToken,
       contentstackEnvironment,
+      contentstackRegion,
       contentTypes
     } = await req.json();
 
@@ -226,22 +246,19 @@ export async function POST(req: NextRequest) {
 
     // Initialize Contentstack service if credentials are provided
     let contentstackService = null;
-    console.log('Contentstack credentials check:', {
-      hasApiKey: !!contentstackApiKey,
-      hasToken: !!contentstackToken,
-      environment: contentstackEnvironment
-    });
+    
     
     if (contentstackApiKey && contentstackToken) {
-      console.log('Initializing Contentstack service...');
+      
       contentstackService = new ContentstackService({
         apiKey: contentstackApiKey,
         deliveryToken: contentstackToken,
-        environment: contentstackEnvironment || 'development'
+        environment: contentstackEnvironment || 'development',
+        region: contentstackRegion || process.env.NEXT_PUBLIC_CONTENTSTACK_REGION
       });
-      console.log('Contentstack service initialized successfully');
+      
     } else {
-      console.log('Contentstack service not initialized - missing credentials');
+      
     }
 
     // Search for relevant content from Contentstack
@@ -253,96 +270,97 @@ export async function POST(req: NextRequest) {
     
     if (contentstackService) {
       try {
-        console.log('Searching Contentstack for:', message);
+        
         
         if (isTourQuery) {
-          console.log('Detected tour query, searching tours');
           
-          // Extract key terms from the message for better searching
-          const keyTerms = message.toLowerCase().match(/\b(swiss|alps|adventure|tour|price|cost|matterhorn|jungfraujoch|zermatt|interlaken|dolomites|italy|austria|hallstatt|salzburg)\b/g) || [];
-          console.log('Key terms found:', keyTerms);
-          
-          let searchQuery = message;
-          if (keyTerms.length > 0) {
-            // Use the first key term that might match
-            searchQuery = keyTerms.find(term => ['swiss', 'alps', 'adventure', 'tour', 'dolomites', 'italy', 'austria'].includes(term)) || keyTerms[0];
-            console.log('Using search query:', searchQuery);
-          }
+          const searchQuery = message;
           
           // Search for tours and FAQs
-          const tourResults = await contentstackService.searchContent({
+          let tourResults = await contentstackService.searchContent({
             contentType: 'tour',
             query: searchQuery,
-            limit: 5
+            limit: 5,
+            locale: 'en-us'
           });
+
+          // Fallback: if no results via regex search, fetch recent tours without query
+          if (tourResults.length === 0) {
+            
+            tourResults = await contentstackService.searchContent({
+              contentType: 'tour',
+              limit: 5,
+              locale: 'en-us'
+            });
+          }
           
           const faqResults = await contentstackService.searchContent({
             contentType: 'faqs',
             query: searchQuery,
-            limit: 3
+            limit: 3,
+            locale: 'en-us'
           });
           
           searchResults.push(...tourResults, ...faqResults);
-          console.log('Tour search results:', tourResults.length);
-          console.log('FAQ search results:', faqResults.length);
-          console.log('Total search results:', searchResults.length);
+          
+
+          // Targeted detail lookup (e.g., "price of <tour name>")
+          const priceMatch = message.match(/price of\s+\"?([^\"]+)\"?|price of\s+([^\?]+)\??/i);
+          const askedTitle = priceMatch ? (priceMatch[1] || priceMatch[2] || '').trim() : '';
+          if (askedTitle) {
+            
+            const specific = await contentstackService.searchContent({
+              contentType: 'tour',
+              // precise title filter
+              filters: { title: { $regex: askedTitle, $options: 'i' } },
+              limit: 1,
+              locale: 'en-us'
+            });
+            if (specific.length > 0) {
+              const tour = specific[0];
+              const price = (tour as any).metadata?.price || '';
+              if (price) {
+                const direct = `The price of "${tour.title}" is ${price}.`;
+                return NextResponse.json({ content: direct, searchResults: specific });
+              } else {
+                const direct = `I couldn't find a price for "${tour.title}". Would you like me to check other details (duration, location, highlights)?`;
+                return NextResponse.json({ content: direct, searchResults: specific });
+              }
+            }
+          }
         } else {
-          console.log('Non-tour query, searching all content types');
+          
           // For general questions, search all available content types
           const allResults = await contentstackService.searchAllContent(message, contentTypes || ['tour', 'faqs']);
           searchResults.push(...allResults);
-          console.log('General search results (all content):', searchResults.length);
           
-          // If no results found, try with broader search terms
-          if (searchResults.length === 0) {
-            console.log('No results found, trying broader search...');
-            
-            // Extract key terms and try individual searches with fuzzy matching
-            const keyTerms = message.toLowerCase().match(/\b(accommodation|accomodation|hotel|refund|insurance|flight|booking|emergency|contact|tour|travel|swiss|alps|italy|france)\b/g) || [];
-            console.log('Key terms found:', keyTerms);
-            
-            // Map common typos to correct terms
-            const termMappings = {
-              'accomodation': 'accommodation',
-              'accomodations': 'accommodation',
-              'accomodate': 'accommodation'
-            };
-            
-            for (const term of keyTerms) {
-              const searchTerm = termMappings[term] || term;
-              console.log(`Searching for: ${searchTerm} (original: ${term})`);
-              
-              const termResults = await contentstackService.searchAllContent(searchTerm, contentTypes || ['tour', 'faqs']);
-              searchResults.push(...termResults);
-              if (searchResults.length > 0) break; // Stop at first successful search
-            }
-            
-            console.log('Broader search results:', searchResults.length);
-          }
+          
+          // No heuristic broader search; keep results as-is
         }
         
         if (searchResults.length > 0) {
-          console.log('Found Contentstack results:', searchResults.map(r => ({ title: r.title, contentType: r.contentType })));
+          
         } else {
-          console.log('No Contentstack results found');
+          
         }
       } catch (error) {
-        console.error('Contentstack search failed:', error);
+        
         searchResults = [];
       }
     } else {
-      console.log('Contentstack service not initialized');
+      
     }
     
     // Format the relevant content
     if (searchResults.length > 0) {
-      console.log('Found results:', searchResults.map(r => ({ title: r.title, contentType: r.contentType })));
-      relevantContent = '\n\nRelevant content from our tour database:\n';
-      searchResults.slice(0, 3).forEach((item, index) => {
+      
+      const shownCount = Math.min(3, searchResults.length);
+      relevantContent = `\n\nTop ${shownCount} tours from our database:\n`;
+      searchResults.slice(0, shownCount).forEach((item, index) => {
         relevantContent += `${index + 1}. ${item.title}\n${item.content}\n\n`;
       });
     } else {
-      console.log('No results found in Contentstack or mock data');
+      
       if (isTourQuery) {
         relevantContent = '\n\nNote: I don\'t have specific information about this tour in our current database, but I can still help you with general travel advice and suggestions!';
       } else {
@@ -391,7 +409,7 @@ If you have relevant tour information from the knowledge base, use it to provide
             { status: 400 }
           );
       }
-    } catch (llmError) {
+    } catch (llmError: any) {
       console.log('LLM API error, returning Contentstack data directly:', llmError.message);
       
       // If we have Contentstack results, return them directly
@@ -432,9 +450,9 @@ If you have relevant tour information from the knowledge base, use it to provide
     });
 
   } catch (error: any) {
-    console.error('Chat API error:', error);
+    
     return NextResponse.json(
-      { error: error.message || 'Failed to process chat request' },
+      { error: (error as Error).message || 'Failed to process chat request' },
       { status: 500 }
     );
   }
@@ -466,9 +484,10 @@ async function callOpenAI(message: string, apiKey: string, model?: string) {
 
     const data = await response.json();
     return data.choices[0].message.content;
-  } catch (error) {
-    console.log('OpenAI API call failed:', error.message);
-    throw error;
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.log('OpenAI API call failed:', msg);
+    throw error as any;
   }
 }
 
@@ -483,7 +502,7 @@ async function callGroq(message: string, apiKey: string, model?: string) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: model || 'llama3-8b-8192',
+      model: model || 'llama-3.1-8b-instant',
       messages: [
         { role: 'system', content: 'You are a helpful travel assistant for a tourism portal. You help users find information about tours, destinations, and travel experiences.' },
         { role: 'user', content: message }
